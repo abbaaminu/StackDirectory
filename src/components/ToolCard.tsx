@@ -81,15 +81,22 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                   ? 'bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-amber-500/30 text-amber-300 border border-amber-500/40'
                   : 'bg-zinc-800/80 text-zinc-200 border border-zinc-700/60 group-hover:border-zinc-600'
               }`}
-            >
+                        >
               {tool.name.slice(0, 2).toUpperCase()}
             </div>
 
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white group-hover:text-amber-300 transition">
+                <a
+                  href={tool.website_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-base font-bold text-white group-hover:text-amber-300 transition hover:underline"
+                  title={`Visit ${tool.website_url}`}
+                >
                   {tool.name}
-                </h3>
+                </a>
                 {(tool.is_featured || tool.is_for_sale) && (
                   <span title={tool.is_for_sale ? "Startup Acquisition Listing" : "Verified & Paddle Featured Upgrade"}>
                     <CheckCircle2 className="w-4 h-4 text-amber-400 fill-amber-400/20" />

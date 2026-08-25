@@ -25,11 +25,8 @@ export const Header: React.FC<HeaderProps> = ({
             ▲
           </div>
           <div>
-            <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
               <span className="text-lg font-bold tracking-tight text-white">StackDirectory</span>
-              <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-800/80 text-zinc-300 border border-zinc-700/60">
-                Next.js 15 • Supabase • Paddle
-              </span>
             </div>
           </div>
         </div>
