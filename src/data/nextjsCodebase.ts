@@ -2,17 +2,46 @@ import { CodeFile } from '../types/directory';
 
 export const CODE_FILES: CodeFile[] = [
   {
+    filename: '02_marketplace_migration.sql',
+    filepath: 'supabase/migrations/02_marketplace_migration.sql',
+    language: 'sql',
+    description: 'Supabase SQL Schema Migration adding startup marketplace, financial metrics, and tech stack fields to the tools table.',
+    code: `-- ==============================================================================
+-- SUPABASE SQL SCHEMA MIGRATION: Startup Acquisition Marketplace & Metrics
+-- ==============================================================================
+
+-- 1. Add startup acquisition marketplace fields to 'tools' table
+ALTER TABLE public.tools
+    ADD COLUMN IF NOT EXISTS is_for_sale BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS asking_price NUMERIC,
+    ADD COLUMN IF NOT EXISTS monthly_revenue NUMERIC NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS monthly_profit NUMERIC NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS seller_contact TEXT,
+    ADD COLUMN IF NOT EXISTS tech_stack TEXT[];
+
+-- 2. Create index on 'is_for_sale' for high-speed marketplace querying
+CREATE INDEX IF NOT EXISTS idx_tools_is_for_sale ON public.tools(is_for_sale);
+
+-- 3. Comments explaining schema columns
+COMMENT ON COLUMN public.tools.is_for_sale IS 'Indicates if startup/micro-SaaS is listed for acquisition';
+COMMENT ON COLUMN public.tools.asking_price IS 'Target acquisition price in USD';
+COMMENT ON COLUMN public.tools.monthly_revenue IS 'Monthly Recurring Revenue (MRR) in USD';
+COMMENT ON COLUMN public.tools.monthly_profit IS 'Net monthly profit after operational expenses in USD';
+COMMENT ON COLUMN public.tools.seller_contact IS 'Founder contact email, Telegram handle, or listing URL';
+COMMENT ON COLUMN public.tools.tech_stack IS 'Array of technologies utilized (e.g. Next.js, Supabase, Tailwind, Stripe)';`
+  },
+  {
     filename: '01_schema.sql',
     filepath: 'supabase/migrations/01_schema.sql',
     language: 'sql',
-    description: 'PostgreSQL database schema with RLS policies, indexes, and atomic upvote RPC function for Supabase.',
+    description: 'Complete PostgreSQL database schema with RLS policies, indexes, marketplace columns, and atomic upvote RPC for Supabase.',
     code: `-- 1. Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 2. Create Pricing Type Enum
 CREATE TYPE pricing_type_enum AS ENUM ('Free', 'Freemium', 'Paid', 'Open Source');
 
--- 3. Create 'tools' Table
+-- 3. Create 'tools' Table (with Startup Marketplace support)
 CREATE TABLE IF NOT EXISTS public.tools (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
@@ -25,6 +54,13 @@ CREATE TABLE IF NOT EXISTS public.tools (
     is_approved BOOLEAN NOT NULL DEFAULT FALSE,
     is_featured BOOLEAN NOT NULL DEFAULT FALSE,
     paddle_customer_id VARCHAR(255) DEFAULT NULL,
+    -- Startup Acquisition Marketplace Fields:
+    is_for_sale BOOLEAN NOT NULL DEFAULT FALSE,
+    asking_price NUMERIC,
+    monthly_revenue NUMERIC NOT NULL DEFAULT 0,
+    monthly_profit NUMERIC NOT NULL DEFAULT 0,
+    seller_contact TEXT,
+    tech_stack TEXT[],
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
@@ -40,6 +76,7 @@ CREATE TABLE IF NOT EXISTS public.upvotes (
 -- 5. Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_tools_is_approved ON public.tools(is_approved);
 CREATE INDEX IF NOT EXISTS idx_tools_is_featured ON public.tools(is_featured);
+CREATE INDEX IF NOT EXISTS idx_tools_is_for_sale ON public.tools(is_for_sale);
 CREATE INDEX IF NOT EXISTS idx_tools_upvotes ON public.tools(upvotes DESC);
 CREATE INDEX IF NOT EXISTS idx_upvotes_tool_user ON public.upvotes(tool_id, user_id);
 
@@ -48,12 +85,12 @@ ALTER TABLE public.tools ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.upvotes ENABLE ROW LEVEL SECURITY;
 
 -- 7. RLS Policies for 'tools'
--- Anyone can view approved tools
+-- Anyone can view approved tools and marketplace listings
 CREATE POLICY "Public tools are viewable by everyone" 
 ON public.tools FOR SELECT 
 USING (is_approved = TRUE);
 
--- Anyone can submit a new tool (defaults to is_approved = FALSE)
+-- Anyone can submit a new tool (100% free submission defaults to is_approved = FALSE)
 CREATE POLICY "Anyone can submit a tool" 
 ON public.tools FOR INSERT 
 WITH CHECK (
@@ -62,12 +99,10 @@ WITH CHECK (
 );
 
 -- 8. RLS Policies for 'upvotes'
--- Anyone can read upvotes to verify their voted status
 CREATE POLICY "Upvotes viewable by everyone" 
 ON public.upvotes FOR SELECT 
 USING (TRUE);
 
--- Authenticated users or anonymous with client ID can insert an upvote
 CREATE POLICY "Users can create upvotes" 
 ON public.upvotes FOR INSERT 
 WITH CHECK (TRUE);
@@ -85,9 +120,7 @@ DECLARE
     voted BOOLEAN;
     new_count INTEGER;
 BEGIN
-    -- Check if vote already exists
     IF EXISTS (SELECT 1 FROM public.upvotes WHERE tool_id = target_tool_id AND user_id = voter_id) THEN
-        -- Remove vote (unlike)
         DELETE FROM public.upvotes WHERE tool_id = target_tool_id AND user_id = voter_id;
         
         UPDATE public.tools 
@@ -97,7 +130,6 @@ BEGIN
         
         voted := FALSE;
     ELSE
-        -- Insert vote
         INSERT INTO public.upvotes (tool_id, user_id) 
         VALUES (target_tool_id, voter_id);
         
@@ -120,7 +152,7 @@ $$;`
     filename: 'page.tsx',
     filepath: 'app/page.tsx',
     language: 'tsx',
-    description: 'Next.js 14/15 App Router Server Component Homepage with Search, Filters, and Masonry/Grid Card Layout.',
+    description: 'Next.js 14/15 App Router Server Component Homepage with Search, Category Filter Pills, and Marketplace Card Layout.',
     code: `import { Suspense } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { DirectoryHero } from '@/components/DirectoryHero';
@@ -153,8 +185,8 @@ export default async function HomePage() {
         {/* Hero Section */}
         <DirectoryHero totalCount={initialTools.length} />
 
-        {/* Instant Search, Tag Filter & Masonry/Grid Client Section */}
-        <Suspense fallback={<div className="text-zinc-500 py-12 text-center">Loading tools directory...</div>}>
+        {/* Instant Search, Tag Filter, Startups For Sale Pill & Grid Client Section */}
+        <Suspense fallback={<div className="text-zinc-500 py-12 text-center">Loading marketplace directory...</div>}>
           <DirectoryGrid initialTools={initialTools} />
         </Suspense>
       </div>
@@ -166,7 +198,7 @@ export default async function HomePage() {
     filename: 'route.ts',
     filepath: 'app/api/webhooks/paddle/route.ts',
     language: 'typescript',
-    description: 'Next.js App Router Webhook Route Handler for Paddle. Verifies HMAC SHA-256 signature and upgrades tool.',
+    description: 'Next.js App Router Webhook Route Handler for Paddle ($19 USD Instant Featured). Verifies HMAC signature and upgrades tool.',
     code: `import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase/server';
@@ -231,8 +263,7 @@ export async function POST(req: NextRequest) {
       customerId: data?.customer_id,
     });
 
-    // 2. Handle successful checkout / transaction event
-    // In Paddle Billing v2: 'transaction.completed' or 'transaction.paid'
+    // 2. Handle successful checkout / transaction event ($19 USD Featured Tier)
     if (event_type === 'transaction.completed' || event_type === 'transaction.paid') {
       const customData = data?.custom_data || {};
       const toolId = customData.tool_id;
@@ -271,7 +302,7 @@ export async function POST(req: NextRequest) {
       
       return NextResponse.json({
         success: true,
-        message: 'Tool upgraded to featured tier successfully',
+        message: 'Tool upgraded to featured tier successfully ($19 USD)',
         tool_id: toolId,
       });
     }
@@ -324,7 +355,7 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
     filename: 'database.ts',
     filepath: 'types/database.ts',
     language: 'typescript',
-    description: 'TypeScript interfaces mapped directly to Supabase table definitions.',
+    description: 'TypeScript interfaces mapped directly to Supabase table definitions including marketplace fields.',
     code: `export type PricingType = 'Free' | 'Freemium' | 'Paid' | 'Open Source';
 
 export interface Tool {
@@ -339,6 +370,13 @@ export interface Tool {
   is_approved: boolean;
   is_featured: boolean;
   paddle_customer_id: string | null;
+  // Startup Acquisition Marketplace Fields:
+  is_for_sale?: boolean;
+  asking_price?: number;
+  monthly_revenue?: number;
+  monthly_profit?: number;
+  seller_contact?: string;
+  tech_stack?: string[];
   created_at: string;
 }
 
@@ -356,6 +394,12 @@ export interface SubmitToolPayload {
   website_url: string;
   pricing_type: PricingType;
   category: string;
+  is_for_sale?: boolean;
+  asking_price?: number;
+  monthly_revenue?: number;
+  monthly_profit?: number;
+  seller_contact?: string;
+  tech_stack?: string[];
 }`
   },
   {
@@ -373,6 +417,7 @@ NEXT_PUBLIC_PADDLE_CLIENT_TOKEN="live_..." # Or test_...
 NEXT_PUBLIC_PADDLE_ENV="sandbox" # 'sandbox' or 'production'
 PADDLE_API_KEY="pdl_..."
 PADDLE_WEBHOOK_SECRET_KEY="pdl_ntf_set_..." # Found in Paddle Notifications / Webhooks settings
-NEXT_PUBLIC_PADDLE_FEATURED_PRICE_ID="pri_01h..." # $49 one-time product price ID`
+NEXT_PUBLIC_PADDLE_FEATURED_PRICE_ID="pri_01h..." # $19 flat fee one-time product price ID`
   }
 ];
+

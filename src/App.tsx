@@ -6,9 +6,10 @@ import { SubmitModal } from './components/SubmitModal';
 import { PaddleWebhookSimulator } from './components/PaddleWebhookSimulator';
 import { CodeViewerModal } from './components/CodeViewerModal';
 import { AdminQueueModal } from './components/AdminQueueModal';
+import { AcquisitionModal } from './components/AcquisitionModal';
 import { INITIAL_TOOLS } from './data/mockTools';
 import { Tool } from './types/directory';
-import { Sparkles, Zap, CheckCircle2, AlertCircle, Code2, Plus } from 'lucide-react';
+import { Sparkles, Zap, CheckCircle2, AlertCircle, Code2, Plus, ShoppingBag } from 'lucide-react';
 
 export default function App() {
   const [tools, setTools] = useState<Tool[]>(() => {
@@ -27,7 +28,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedPricing, setSelectedPricing] = useState('All');
-  const [sortBy, setSortBy] = useState<'featured' | 'upvotes' | 'newest'>('featured');
+  const [sortBy, setSortBy] = useState<'featured' | 'upvotes' | 'newest' | 'for_sale'>('featured');
 
   // Modals & Panels State
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
@@ -35,6 +36,7 @@ export default function App() {
   const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [selectedWebhookToolId, setSelectedWebhookToolId] = useState<string | undefined>(undefined);
+  const [selectedAcquisitionTool, setSelectedAcquisitionTool] = useState<Tool | null>(null);
 
   // Toast Notification
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' } | null>(null);
@@ -58,7 +60,7 @@ export default function App() {
     setTools((prev) =>
       prev.map((tool) => {
         if (tool.id === toolId) {
-          const hasUpvoted = !!tool.user_has_upvoted;
+          const hasUpvoted = !tool.user_has_upvoted;
           return {
             ...tool,
             user_has_upvoted: !hasUpvoted,
@@ -138,6 +140,10 @@ export default function App() {
     setIsWebhookModalOpen(true);
   };
 
+  const handleOpenAcquisition = (tool: Tool) => {
+    setSelectedAcquisitionTool(tool);
+  };
+
   // Filtered and Sorted Approved Tools
   const approvedTools = useMemo(() => {
     return tools.filter((tool) => tool.is_approved);
@@ -146,6 +152,10 @@ export default function App() {
   const pendingTools = useMemo(() => {
     return tools.filter((tool) => !tool.is_approved);
   }, [tools]);
+
+  const forSaleCount = useMemo(() => {
+    return approvedTools.filter((tool) => tool.is_for_sale).length;
+  }, [approvedTools]);
 
   const displayedTools = useMemo(() => {
     return approvedTools
@@ -157,13 +167,18 @@ export default function App() {
           const matchesTagline = tool.tagline.toLowerCase().includes(q);
           const matchesCategory = tool.category.toLowerCase().includes(q);
           const matchesDesc = tool.description.toLowerCase().includes(q);
-          if (!matchesName && !matchesTagline && !matchesCategory && !matchesDesc) {
+          const matchesTech = tool.tech_stack?.some((t) => t.toLowerCase().includes(q));
+          if (!matchesName && !matchesTagline && !matchesCategory && !matchesDesc && !matchesTech) {
             return false;
           }
         }
 
         // Category filter
-        if (selectedCategory !== 'All' && tool.category !== selectedCategory) {
+        if (selectedCategory === 'Startups For Sale') {
+          if (!tool.is_for_sale) {
+            return false;
+          }
+        } else if (selectedCategory !== 'All' && tool.category !== selectedCategory) {
           return false;
         }
 
@@ -175,6 +190,11 @@ export default function App() {
         return true;
       })
       .sort((a, b) => {
+        if (sortBy === 'for_sale') {
+          if (a.is_for_sale && !b.is_for_sale) return -1;
+          if (!a.is_for_sale && b.is_for_sale) return 1;
+          return b.upvotes - a.upvotes;
+        }
         if (sortBy === 'featured') {
           // Featured first, then upvotes
           if (a.is_featured && !b.is_featured) return -1;
@@ -244,6 +264,7 @@ export default function App() {
           onSortChange={setSortBy}
           totalApproved={approvedTools.length}
           featuredCount={featuredCount}
+          forSaleCount={forSaleCount}
           onOpenSubmit={() => setIsSubmitModalOpen(true)}
         />
 
@@ -254,9 +275,9 @@ export default function App() {
               <div className="w-12 h-12 rounded-2xl bg-zinc-800 flex items-center justify-center text-zinc-400 mx-auto mb-4">
                 <AlertCircle className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-bold text-white">No tools found</h3>
+              <h3 className="text-lg font-bold text-white">No startups or tools found</h3>
               <p className="text-xs text-zinc-400 mt-1 max-w-md mx-auto">
-                No apps matched your current search or category filter. Try clearing your search or submit your own app.
+                No listings matched your current search or category filter. Try clearing your search or list your startup for free.
               </p>
               <div className="mt-5 flex items-center justify-center gap-3">
                 <button
@@ -273,7 +294,7 @@ export default function App() {
                   onClick={() => setIsSubmitModalOpen(true)}
                   className="px-4 py-2 rounded-lg text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-zinc-950 transition"
                 >
-                  Submit New App
+                  Submit Startup
                 </button>
               </div>
             </div>
@@ -285,6 +306,7 @@ export default function App() {
                   tool={tool}
                   onToggleUpvote={handleToggleUpvote}
                   onOpenUpgradeForTool={handleOpenUpgradeForTool}
+                  onOpenAcquisition={handleOpenAcquisition}
                 />
               ))}
             </div>
@@ -299,10 +321,10 @@ export default function App() {
               <span>Full-Stack Next.js 15 Baseline</span>
             </div>
             <h4 className="text-lg font-bold text-white">
-              Ready to deploy this directory to Supabase and Paddle?
+              Ready to deploy this startup acquisition directory to Supabase & Paddle?
             </h4>
             <p className="text-xs text-zinc-400 max-w-xl">
-              Copy the complete SQL migration scripts, Next.js Server Components, Paddle Webhook Route Handler, and Supabase client files directly into your project.
+              Copy the complete SQL migration scripts (with startup marketplace fields), Next.js Server Components, Paddle Webhook Route Handler, and Supabase client files directly into your project.
             </p>
           </div>
 
@@ -311,7 +333,7 @@ export default function App() {
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-zinc-950 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-lg shadow-amber-500/20 active:scale-95 transition shrink-0"
           >
             <Code2 className="w-4 h-4" />
-            <span>Open Code & Architecture Hub</span>
+            <span>Open Code & SQL Migration Hub</span>
           </button>
         </section>
       </main>
@@ -322,7 +344,7 @@ export default function App() {
           <div className="flex items-center gap-2 text-zinc-400">
             <span className="font-bold text-zinc-200">StackDirectory</span>
             <span>—</span>
-            <span>Next.js 14/15 • Supabase • Paddle Billing</span>
+            <span>Startup Discovery & Acquisition Marketplace (Next.js • Supabase • Paddle)</span>
           </div>
 
           <div className="flex items-center gap-4 text-xs text-zinc-400">
@@ -330,7 +352,7 @@ export default function App() {
               onClick={() => setIsCodeModalOpen(true)}
               className="hover:text-amber-300 transition underline underline-offset-2"
             >
-              SQL Schema
+              SQL Schema Migration
             </button>
             <button
               onClick={() => setIsWebhookModalOpen(true)}
@@ -382,6 +404,17 @@ export default function App() {
         onRejectTool={handleRejectTool}
         onToggleFeature={handleToggleFeature}
       />
+
+      {/* Startup Acquisition Modal */}
+      <AcquisitionModal
+        isOpen={!!selectedAcquisitionTool}
+        onClose={() => setSelectedAcquisitionTool(null)}
+        tool={selectedAcquisitionTool}
+        onOfferSubmitted={(offerSummary) => {
+          showToast(`📬 ${offerSummary}`, 'success');
+        }}
+      />
     </div>
   );
 }
+

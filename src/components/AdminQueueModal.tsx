@@ -82,6 +82,11 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                       <span className="text-[11px] px-2 py-0.2 rounded bg-zinc-800 text-zinc-400">
                         {tool.pricing_type}
                       </span>
+                      {tool.is_for_sale && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          For Sale (${tool.asking_price?.toLocaleString() || 'N/A'}) • MRR ${tool.monthly_revenue || 0}/mo
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-zinc-400">{tool.tagline}</p>
                     <a

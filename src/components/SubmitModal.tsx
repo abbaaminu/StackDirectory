@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Sparkles, Zap, ShieldAlert, CheckCircle2, ArrowRight, CreditCard, Lock } from 'lucide-react';
+import { X, Sparkles, Zap, ShieldAlert, CheckCircle2, ArrowRight, CreditCard, Lock, DollarSign, TrendingUp, Cpu, Mail, ShoppingBag } from 'lucide-react';
 import { PricingType, SubmissionFormState, Tool } from '../types/directory';
 import { CATEGORIES } from '../data/mockTools';
 
@@ -21,8 +21,14 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     website_url: '',
     category: 'Developer Tools',
     pricing_type: 'Freemium',
-    tier: 'paddle_featured',
+    tier: 'free',
     customer_email: '',
+    is_for_sale: false,
+    asking_price: '',
+    monthly_revenue: '',
+    monthly_profit: '',
+    seller_contact: '',
+    tech_stack: 'Next.js, Supabase, Tailwind CSS',
   });
 
   const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
@@ -40,6 +46,17 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       return;
     }
 
+    if (formData.is_for_sale) {
+      if (!formData.asking_price || Number(formData.asking_price) <= 0) {
+        setErrorMsg('Please enter a valid Asking Price for your startup listing.');
+        return;
+      }
+      if (!formData.seller_contact?.trim()) {
+        setErrorMsg('Please provide a seller contact email or link for potential buyers.');
+        return;
+      }
+    }
+
     let normalizedUrl = formData.website_url.trim();
     if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
       normalizedUrl = `https://${normalizedUrl}`;
@@ -47,61 +64,61 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
 
     const toolId = `tool_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
 
+    // Parse tech stack array
+    const parsedTechStack = formData.tech_stack
+      ? formData.tech_stack.split(',').map((s) => s.trim()).filter(Boolean)
+      : [];
+
+    const baseTool: Tool = {
+      id: toolId,
+      name: formData.name.trim(),
+      tagline: formData.tagline.trim(),
+      description: formData.description.trim() || formData.tagline.trim(),
+      website_url: normalizedUrl,
+      category: formData.category === 'All' ? 'Developer Tools' : formData.category,
+      pricing_type: formData.pricing_type,
+      upvotes: formData.tier === 'paddle_featured' ? 1 : 0,
+      is_approved: formData.tier === 'paddle_featured', // Instant approval with Paddle
+      is_featured: formData.tier === 'paddle_featured', // Instant boost with Paddle
+      paddle_customer_id:
+        formData.tier === 'paddle_featured'
+          ? `ctm_pdl_${Math.random().toString(36).substring(2, 9)}`
+          : null,
+      created_at: new Date().toISOString(),
+      user_has_upvoted: formData.tier === 'paddle_featured',
+
+      // Startup Marketplace fields
+      is_for_sale: formData.is_for_sale,
+      asking_price: formData.is_for_sale ? Number(formData.asking_price) || 0 : undefined,
+      monthly_revenue: formData.is_for_sale ? Number(formData.monthly_revenue) || 0 : 0,
+      monthly_profit: formData.is_for_sale ? Number(formData.monthly_profit) || 0 : 0,
+      seller_contact: formData.is_for_sale ? formData.seller_contact?.trim() : undefined,
+      tech_stack: formData.is_for_sale ? parsedTechStack : undefined,
+    };
+
     if (formData.tier === 'paddle_featured') {
-      // Simulate Paddle Checkout flow
+      // Simulate Paddle Checkout flow ($19 USD)
       setIsProcessingCheckout(true);
       setTimeout(() => {
         setIsProcessingCheckout(false);
         setShowCheckoutSuccess(true);
 
-        const newTool: Tool = {
-          id: toolId,
-          name: formData.name.trim(),
-          tagline: formData.tagline.trim(),
-          description: formData.description.trim() || formData.tagline.trim(),
-          website_url: normalizedUrl,
-          category: formData.category,
-          pricing_type: formData.pricing_type,
-          upvotes: 1,
-          is_approved: true, // Upgraded instantly via Paddle
-          is_featured: true, // Upgraded instantly via Paddle
-          paddle_customer_id: `ctm_pdl_${Math.random().toString(36).substring(2, 9)}`,
-          created_at: new Date().toISOString(),
-          user_has_upvoted: true,
-        };
-
         setTimeout(() => {
-          onSubmitTool(newTool, true);
+          onSubmitTool(baseTool, true);
           setShowCheckoutSuccess(false);
           onClose();
         }, 1200);
       }, 1500);
     } else {
       // Free Submission -> Queue for review
-      const newTool: Tool = {
-        id: toolId,
-        name: formData.name.trim(),
-        tagline: formData.tagline.trim(),
-        description: formData.description.trim() || formData.tagline.trim(),
-        website_url: normalizedUrl,
-        category: formData.category,
-        pricing_type: formData.pricing_type,
-        upvotes: 0,
-        is_approved: false, // Free queue
-        is_featured: false,
-        paddle_customer_id: null,
-        created_at: new Date().toISOString(),
-        user_has_upvoted: false,
-      };
-
-      onSubmitTool(newTool, false);
+      onSubmitTool(baseTool, false);
       onClose();
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-xl bg-[#0e0f17] border border-zinc-800 rounded-2xl shadow-2xl p-6 sm:p-8 text-zinc-100 my-8">
+      <div className="relative w-full max-w-2xl bg-[#0e0f17] border border-zinc-800 rounded-2xl shadow-2xl p-6 sm:p-8 text-zinc-100 my-8">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -114,13 +131,13 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         <div>
           <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20 mb-3">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Submit Your Startup / Desktop App</span>
+            <span>List Startup, Micro-SaaS & Developer Tools</span>
           </div>
           <h2 className="text-2xl font-bold text-white tracking-tight">
-            List on StackDirectory
+            Submit to StackDirectory
           </h2>
           <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-            Choose between standard free review queue or instant Paddle featured launch.
+            Standard directory listings are 100% free. Upgrade to Instant Featured Launch with Paddle ($19 USD flat fee).
           </p>
         </div>
 
@@ -134,7 +151,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           {/* Plan Tier Selection */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            {/* Free Tier Card */}
+            {/* Free Tier Card (100% Free) */}
             <div
               onClick={() => setFormData({ ...formData, tier: 'free' })}
               className={`cursor-pointer rounded-xl p-4 border transition-all ${
@@ -144,15 +161,20 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Free Queue</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Free Submission</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                    100% FREE
+                  </span>
+                </div>
                 <span className="text-sm font-black text-white">$0</span>
               </div>
               <p className="text-[11px] text-zinc-400 mt-2 leading-relaxed">
-                App is saved to Supabase with <code className="text-zinc-300">is_approved = false</code>. Subject to manual review queue.
+                App is saved to Supabase review queue (<code className="text-zinc-300">is_approved = false</code>). Completely free $0 upfront fee.
               </p>
             </div>
 
-            {/* Paddle Instant Featured Tier Card */}
+            {/* Paddle Instant Featured Tier Card ($19 USD) */}
             <div
               onClick={() => setFormData({ ...formData, tier: 'paddle_featured' })}
               className={`cursor-pointer rounded-xl p-4 border transition-all relative overflow-hidden ${
@@ -169,16 +191,158 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                   <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
                   <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">Paddle Featured</span>
                 </div>
-                <span className="text-sm font-black text-amber-400 mr-12">$49</span>
+                <span className="text-sm font-black text-amber-400 mr-12">$19 USD</span>
               </div>
               <p className="text-[11px] text-zinc-300 mt-2 leading-relaxed">
-                Instant approval, glowing gold border, priority top positioning, and webhook upgrade simulation.
+                Instant approval, gold badge, top placement, and Paddle webhook upgrade simulation.
               </p>
             </div>
           </div>
 
-          {/* Form Fields */}
-          <div className="space-y-3.5 pt-2">
+          {/* Acquisition Marketplace Toggle (Acquire / Microns mode) */}
+          <div className="p-4 rounded-xl bg-gradient-to-r from-zinc-900/90 via-amber-500/5 to-zinc-900/90 border border-amber-500/30 shadow-inner">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                  <ShoppingBag className="w-4 h-4" />
+                </div>
+                <div>
+                  <label htmlFor="toggle-marketplace" className="text-xs font-bold text-white cursor-pointer flex items-center gap-2">
+                    List this startup for sale (Acquire/Microns mode)
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      Marketplace
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Attract buyers, show MRR and net profit, and collect acquisition offers.
+                  </p>
+                </div>
+              </div>
+
+              {/* Custom Toggle Switch */}
+              <button
+                type="button"
+                id="toggle-marketplace"
+                role="switch"
+                aria-checked={formData.is_for_sale}
+                onClick={() => setFormData({ ...formData, is_for_sale: !formData.is_for_sale })}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  formData.is_for_sale ? 'bg-amber-500' : 'bg-zinc-700'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                    formData.is_for_sale ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Helper text with 10% platform commission fee disclaimer */}
+            <p className="text-[11px] text-amber-300/90 mt-3 pt-2.5 border-t border-zinc-800/80 leading-relaxed flex items-center gap-1.5">
+              <span>💡</span>
+              <span>
+                <strong>Commission notice:</strong> Free to list for sale. StackDirectory collects a <strong>10% platform commission fee</strong> upon successful acquisition deal closure.
+              </span>
+            </p>
+
+            {/* Conditional Acquisition Inputs */}
+            {formData.is_for_sale && (
+              <div className="mt-4 space-y-3 pt-3 border-t border-amber-500/20 animate-fade-in">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-amber-300 mb-1">
+                      Asking Price ($ USD) *
+                    </label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-zinc-500" />
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.asking_price}
+                        onChange={(e) => setFormData({ ...formData, asking_price: e.target.value })}
+                        placeholder="25000"
+                        required={formData.is_for_sale}
+                        className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-950 text-white text-xs border border-amber-500/40 focus:border-amber-500 outline-none transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                      Monthly Revenue (MRR $)
+                    </label>
+                    <div className="relative">
+                      <TrendingUp className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-emerald-500" />
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.monthly_revenue}
+                        onChange={(e) => setFormData({ ...formData, monthly_revenue: e.target.value })}
+                        placeholder="1450"
+                        className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-950 text-white text-xs border border-zinc-700 focus:border-amber-500 outline-none transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                      Monthly Profit ($)
+                    </label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-cyan-500" />
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.monthly_profit}
+                        onChange={(e) => setFormData({ ...formData, monthly_profit: e.target.value })}
+                        placeholder="1100"
+                        className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-950 text-white text-xs border border-zinc-700 focus:border-amber-500 outline-none transition"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-amber-300 mb-1">
+                      Seller Contact Email / Telegram *
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-zinc-500" />
+                      <input
+                        type="text"
+                        value={formData.seller_contact}
+                        onChange={(e) => setFormData({ ...formData, seller_contact: e.target.value })}
+                        placeholder="founder@mystartup.com or @telegram_handle"
+                        required={formData.is_for_sale}
+                        className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-950 text-white text-xs border border-amber-500/40 focus:border-amber-500 outline-none transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                      Tech Stack Tags (Comma separated)
+                    </label>
+                    <div className="relative">
+                      <Cpu className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-zinc-500" />
+                      <input
+                        type="text"
+                        value={formData.tech_stack}
+                        onChange={(e) => setFormData({ ...formData, tech_stack: e.target.value })}
+                        placeholder="Next.js 15, Supabase, Tailwind, Stripe, Python"
+                        className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-950 text-white text-xs border border-zinc-700 focus:border-amber-500 outline-none transition"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Standard Form Fields */}
+          <div className="space-y-3.5 pt-1">
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">
                 Startup / App Name *
@@ -224,14 +388,14 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
 
               <div>
                 <label className="block text-xs font-medium text-zinc-300 mb-1">
-                  Category
+                  Primary Category
                 </label>
                 <select
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition cursor-pointer"
                 >
-                  {CATEGORIES.filter((c) => c !== 'All').map((cat) => (
+                  {CATEGORIES.filter((c) => c !== 'All' && c !== 'Startups For Sale').map((cat) => (
                     <option key={cat} value={cat}>
                       {cat}
                     </option>
@@ -260,7 +424,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               {formData.tier === 'paddle_featured' && (
                 <div>
                   <label className="block text-xs font-medium text-amber-300 mb-1 flex items-center gap-1">
-                    <Lock className="w-3 h-3" /> Billing Email (Paddle)
+                    <Lock className="w-3 h-3" /> Billing Email (Paddle $19)
                   </label>
                   <input
                     type="email"
@@ -275,13 +439,13 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
 
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">
-                Full Description (Optional)
+                Full Description / Metrics Overview (Optional)
               </label>
               <textarea
                 rows={2}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Explain the core problem solved, architecture, and desktop features..."
+                placeholder="Explain the product, user growth, architecture, and reason for selling (if applicable)..."
                 className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition resize-none"
               />
             </div>
@@ -306,17 +470,17 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 {isProcessingCheckout ? (
                   <>
                     <span className="h-3.5 w-3.5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
-                    <span>Opening Paddle Checkout...</span>
+                    <span>Opening Paddle Checkout ($19)...</span>
                   </>
                 ) : showCheckoutSuccess ? (
                   <>
                     <CheckCircle2 className="w-4 h-4 text-zinc-950" />
-                    <span>Payment Verified! Upgrading...</span>
+                    <span>Payment Verified! Launching...</span>
                   </>
                 ) : (
                   <>
                     <CreditCard className="w-3.5 h-3.5" />
-                    <span>Pay $49 with Paddle & Launch Instantly</span>
+                    <span>Pay $19 USD with Paddle & Launch Instantly</span>
                   </>
                 )}
               </button>
@@ -325,7 +489,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 type="submit"
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 active:scale-95 transition"
               >
-                <span>Submit to Free Review Queue</span>
+                <span>Submit 100% Free ($0) to Queue</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
@@ -335,3 +499,4 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     </div>
   );
 };
+

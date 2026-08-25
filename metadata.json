@@ -1,6 +1,7 @@
 {
-  "name": "Startup & App Discovery Directory",
-  "description": "A startup and app discovery directory with submission review queue, Paddle instant feature upgrades, upvoting, and Supabase integration.",
+  "name": "StackDirectory - Startup Marketplace & Discovery",
+  "description": "Discover top developer tools, micro-SaaS apps, and acquire startups for sale with Next.js 15, Supabase, and Paddle.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
+

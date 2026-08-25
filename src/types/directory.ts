@@ -15,6 +15,14 @@ export interface Tool {
   paddle_customer_id?: string | null;
   created_at: string;
   user_has_upvoted?: boolean;
+
+  // Startup Marketplace Fields
+  is_for_sale?: boolean;
+  asking_price?: number;
+  monthly_revenue?: number;
+  monthly_profit?: number;
+  seller_contact?: string;
+  tech_stack?: string[];
 }
 
 export interface UpvoteRecord {
@@ -33,6 +41,14 @@ export interface SubmissionFormState {
   pricing_type: PricingType;
   tier: 'free' | 'paddle_featured';
   customer_email?: string;
+
+  // Startup Marketplace Fields
+  is_for_sale: boolean;
+  asking_price?: string;
+  monthly_revenue?: string;
+  monthly_profit?: string;
+  seller_contact?: string;
+  tech_stack?: string;
 }
 
 export interface PaddleWebhookPayload {
@@ -64,3 +80,4 @@ export interface CodeFile {
   description: string;
   code: string;
 }
+
