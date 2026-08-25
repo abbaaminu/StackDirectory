@@ -159,13 +159,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      {/* Header with Submit App button */}
+            {/* Header with Submit App button */}
       <Header
         onOpenSubmit={() => setIsSubmitModalOpen(true)}
-        onOpenCodeViewer={() => {}}
-        onOpenWebhookSimulator={() => {}}
-        onOpenAdminQueue={() => {}}
-        pendingCount={0}
       />
 
       {/* Toast Notification */}
