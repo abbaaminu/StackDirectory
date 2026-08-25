@@ -1,0 +1,6 @@
+{
+  "name": "Startup & App Discovery Directory",
+  "description": "A startup and app discovery directory with submission review queue, Paddle instant feature upgrades, upvoting, and Supabase integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
