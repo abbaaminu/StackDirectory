@@ -4,16 +4,16 @@ import type { Tool } from '../types/directory';
 
 const getPricingBadgeColor = (type: string) => {
   switch (type) {
-    case 'Free':
-      return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded-md text-xs font-semibold';
+        case 'Free':
+      return 'bg-emerald-900/80 text-emerald-300 border border-emerald-500/50 px-2.5 py-0.5 rounded-md text-xs font-semibold';
     case 'Freemium':
-      return 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2.5 py-0.5 rounded-md text-xs font-semibold';
+      return 'bg-cyan-900/80 text-cyan-300 border border-cyan-500/50 px-2.5 py-0.5 rounded-md text-xs font-semibold';
     case 'Open Source':
-            return 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/40 px-2.5 py-0.5 rounded-md text-xs font-semibold';
+      return 'bg-fuchsia-900/80 text-fuchsia-300 border border-fuchsia-500/50 px-2.5 py-0.5 rounded-md text-xs font-semibold';
     case 'Paid':
-      return 'bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2.5 py-0.5 rounded-md text-xs font-semibold';
+      return 'bg-purple-900/80 text-purple-300 border border-purple-500/50 px-2.5 py-0.5 rounded-md text-xs font-semibold';
     default:
-      return 'bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-0.5 rounded-md text-xs font-medium';
+      return 'bg-slate-700 text-slate-200 border border-slate-600 px-2.5 py-0.5 rounded-md text-xs font-medium';
   }
 };
 
@@ -71,7 +71,7 @@ export default function HomePage() {
             {tools.map((tool) => (
               <div
                 key={tool.id}
-                className="bg-slate-900/90 border border-slate-700/80 hover:border-amber-500/80 shadow-lg hover:shadow-amber-500/10 transition-all duration-300 rounded-xl p-5 flex flex-col justify-between"
+                className="bg-slate-800/90 border border-slate-700 hover:border-amber-400 shadow-xl rounded-xl p-5 transition-all duration-200 flex flex-col justify-between"
               >
                 <div>
                   <h2 className="text-white font-bold text-lg hover:text-amber-400 transition-colors">
@@ -80,7 +80,7 @@ export default function HomePage() {
                   <p className="text-slate-400 text-sm mt-1">{tool.tagline}</p>
 
                   <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-0.5 rounded-md text-xs font-medium">
+                    <span className="bg-slate-700 text-slate-200 border border-slate-600 px-2.5 py-0.5 rounded-md text-xs font-medium">
                       {tool.category}
                     </span>
                     <span className={`${getPricingBadgeColor(tool.pricing_type)}`}>
