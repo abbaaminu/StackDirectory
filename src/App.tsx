@@ -190,9 +190,9 @@ export default function App() {
   });
 
   return (
-    <div className="min-h-screen bg-[#090d16] text-white relative overflow-x-hidden">
-      {/* Soft Top Glow */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-96 bg-gradient-to-b from-amber-500/10 via-indigo-600/5 to-transparent" />
+        <div className="min-h-screen bg-[#0a0e17] text-white relative overflow-x-hidden">
+      {/* Ambient Radial Glow */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500/10 via-slate-950 to-slate-950" />
             {/* Header with Submit App button */}
       <Header
         onOpenSubmit={() => setIsSubmitModalOpen(true)}

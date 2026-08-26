@@ -24,18 +24,18 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     setTimeout(() => setIsUpvoteAnimating(false), 300);
   };
 
-        const getPricingBadgeColor = (type: string) => {
+                const getPricingBadgeColor = (type: string) => {
     switch (type) {
       case 'Free':
-        return 'bg-gradient-to-r from-emerald-500/20 to-emerald-400/10 text-emerald-300 border-emerald-500/50 shadow-sm shadow-emerald-500/20';
+        return 'bg-emerald-950/80 text-emerald-400 border border-emerald-500/40 px-2.5 py-0.5 rounded-full text-xs font-semibold';
       case 'Freemium':
-        return 'bg-gradient-to-r from-cyan-500/20 to-cyan-400/10 text-cyan-300 border-cyan-500/50 shadow-sm shadow-cyan-500/20';
+        return 'bg-cyan-950/80 text-cyan-400 border border-cyan-500/40 px-2.5 py-0.5 rounded-full text-xs font-semibold';
       case 'Open Source':
-        return 'bg-gradient-to-r from-fuchsia-500/20 to-purple-500/20 text-fuchsia-300 border-purple-500/50 shadow-sm shadow-purple-500/20';
+        return 'bg-fuchsia-950/80 text-fuchsia-400 border border-fuchsia-500/40 px-2.5 py-0.5 rounded-full text-xs font-semibold';
       case 'Paid':
-        return 'bg-gradient-to-r from-purple-500/20 to-purple-400/10 text-purple-300 border-purple-500/50 shadow-sm shadow-purple-500/20';
+        return 'bg-purple-950/80 text-purple-400 border border-purple-500/40 px-2.5 py-0.5 rounded-full text-xs font-semibold';
       default:
-        return 'bg-slate-800 text-slate-300 border-slate-700';
+        return 'bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-0.5 rounded-full text-xs';
     }
   };
 
@@ -43,7 +43,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     <div
       id={`tool-card-${tool.id}`}
 
-      className={`group relative flex flex-col justify-between rounded-xl p-4 transition-all duration-200 bg-[#0f1523] border border-slate-800/80 hover:border-amber-500/50 shadow-sm hover:shadow-amber-500/5 ${
+      className={`group relative bg-[#131b2e] border border-slate-700/60 hover:border-amber-500/70 shadow-lg hover:shadow-amber-500/10 transition-all duration-300 rounded-xl p-5 flex flex-col justify-between ${
         tool.is_for_sale || tool.is_featured
           ? 'border-amber-500/40 hover:border-amber-400'
           : ''
@@ -85,7 +85,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="text-base font-bold text-white group-hover:text-amber-300 transition hover:underline"
+                  className="text-white font-semibold text-lg hover:text-amber-400 transition-colors"
                   title={`Visit ${tool.website_url}`}
                 >
                   {tool.name}
@@ -198,7 +198,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
       <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           {/* Category Tag */}
-          <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-800/70 text-slate-300 border border-slate-700/60">
+          <span className="bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-0.5 rounded-full text-xs">
             {tool.category}
           </span>
 
