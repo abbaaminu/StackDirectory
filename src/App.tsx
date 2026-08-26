@@ -190,7 +190,7 @@ export default function App() {
   });
 
   return (
-                <div className="bg-[#0B0F17] min-h-screen text-slate-100 relative overflow-x-hidden">
+                <div className="bg-[#0a0e1a] min-h-screen text-slate-100 relative overflow-x-hidden">
       {/* Ambient Header Glow */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(100%_50%_at_50%_0%,rgba(245,158,11,0.12)_0%,transparent_100%)]" />
             {/* Header with Submit App button */}
@@ -284,7 +284,7 @@ export default function App() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by name, tagline, category, or tech stack..."
-            className="w-full pl-10 pr-10 py-3 rounded-xl bg-zinc-900 text-white text-sm border border-zinc-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/40 outline-none transition placeholder:text-slate-500"
+            className="w-full pl-10 pr-10 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-white text-sm placeholder-slate-400 focus:border-amber-400 focus:ring-1 focus:ring-amber-500/40 outline-none transition"
           />
           {searchQuery && (
             <button
