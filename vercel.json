@@ -1,5 +1,12 @@
 {
+<<<<<<< HEAD
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
+=======
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
+  "framework": "vite"
+>>>>>>> e11bbff (Add acquisition offer modal, paddle webhook handler, compact UI, and persistent upvotes)
 }

@@ -16,6 +16,25 @@ const PRICING_FILTERS: ReadonlyArray<'All' | PricingType> = [
 
 type ViewMode = 'all' | 'for_sale';
 
+const VOTED_TOOLS_KEY = 'voted_tools';
+
+const getVotedTools = (): string[] => {
+  try {
+    const raw = localStorage.getItem(VOTED_TOOLS_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveVotedTools = (ids: string[]) => {
+  try {
+    localStorage.setItem(VOTED_TOOLS_KEY, JSON.stringify(ids));
+  } catch {
+    // ignore storage failures (e.g. quota / private mode)
+  }
+};
+
 export default function App() {
   const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +69,11 @@ export default function App() {
         return;
       }
 
-      setTools((data as Tool[]) ?? []);
+      setTools((data as Tool[]).map((tool) => ({
+        ...tool,
+        // Restore persistent upvote state across page reloads
+        user_has_upvoted: getVotedTools().includes(tool.id),
+      })) ?? []);
     } catch (err) {
       console.error('Unexpected error fetching tools:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch tools');
@@ -117,10 +140,19 @@ export default function App() {
       .update({ upvotes: nextUpvotes } as never)
       .eq('id', toolId);
 
-    if (error) {
+        if (error) {
       console.error('Failed to update upvotes:', error.message);
       showToast('❌ Could not update upvote.');
       return;
+    }
+
+    // Persist upvote state so it survives page reloads
+    const votedTools = getVotedTools();
+    const isUpvoting = !tool.user_has_upvoted;
+    if (isUpvoting && !votedTools.includes(toolId)) {
+      saveVotedTools([...votedTools, toolId]);
+    } else if (!isUpvoting) {
+      saveVotedTools(votedTools.filter((id) => id !== toolId));
     }
 
     setTools((prev) =>
@@ -270,7 +302,7 @@ export default function App() {
             <p>{error}</p>
           </div>
         ) : displayedTools.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:grid-cols-3">
             {displayedTools.map((tool) => (
               <ToolCard
                 key={tool.id}

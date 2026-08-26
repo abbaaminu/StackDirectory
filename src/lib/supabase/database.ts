@@ -36,7 +36,7 @@ export interface Database {
         }
         Update: Partial<Database['public']['Tables']['tools']['Insert']>
       }
-      upvotes: {
+            upvotes: {
         Row: {
           id: string
           tool_id: string
@@ -50,6 +50,29 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['upvotes']['Insert']>
+      }
+      acquisition_offers: {
+        Row: {
+          id: string
+          tool_id: string
+          buyer_name: string
+          buyer_email: string
+          offer_amount: number
+          message: string | null
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tool_id: string
+          buyer_name: string
+          buyer_email: string
+          offer_amount: number
+          message?: string | null
+          status?: string
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['acquisition_offers']['Insert']>
       }
     }
     Functions: {

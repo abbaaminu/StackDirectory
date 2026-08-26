@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ExternalLink, ChevronUp, Sparkles, Zap, CheckCircle2, DollarSign, TrendingUp, Cpu, Mail, ShoppingBag, ArrowUpRight } from 'lucide-react';
+import { ExternalLink, ChevronUp, Sparkles, Zap, CheckCircle2, Cpu, ShoppingBag } from 'lucide-react';
 import { Tool } from '../types/directory';
 
 interface ToolCardProps {
@@ -24,30 +24,28 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     setTimeout(() => setIsUpvoteAnimating(false), 300);
   };
 
-  const getPricingBadgeColor = (type: string) => {
+    const getPricingBadgeColor = (type: string) => {
     switch (type) {
       case 'Free':
-        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+        return 'bg-gradient-to-r from-cyan-500/20 to-teal-500/20 text-cyan-300 border-cyan-500/40';
       case 'Freemium':
-        return 'bg-blue-500/10 text-blue-400 border-blue-500/30';
+        return 'bg-gradient-to-r from-indigo-500/20 to-violet-500/20 text-indigo-300 border-indigo-500/40';
       case 'Open Source':
-        return 'bg-purple-500/10 text-purple-400 border-purple-500/30';
+        return 'bg-gradient-to-r from-fuchsia-500/20 to-purple-500/20 text-fuchsia-300 border-purple-500/40';
       case 'Paid':
-        return 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+        return 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border-amber-500/40';
       default:
-        return 'bg-zinc-800 text-zinc-300 border-zinc-700';
+        return 'bg-slate-800 text-slate-300 border-slate-700';
     }
   };
 
-  return (
+    return (
     <div
       id={`tool-card-${tool.id}`}
-      className={`group relative flex flex-col justify-between rounded-2xl p-6 transition-all duration-300 ${
-        tool.is_for_sale
-          ? 'bg-gradient-to-b from-[#14131c] via-[#101018] to-[#0c0d14] border-2 border-amber-500/50 shadow-xl shadow-amber-500/10 hover:border-amber-400'
-          : tool.is_featured
-          ? 'bg-gradient-to-b from-[#17161f] to-[#101017] border-2 border-amber-500/60 shadow-xl shadow-amber-500/10 hover:border-amber-400 hover:shadow-amber-500/20'
-          : 'bg-[#101118] border border-zinc-800/80 hover:border-zinc-700 shadow-md hover:shadow-lg'
+      className={`group relative flex flex-col justify-between rounded-xl p-4 transition-all duration-200 bg-slate-900/80 border border-slate-800 hover:border-amber-500/40 hover:shadow-xl hover:shadow-amber-500/5 ${
+        tool.is_for_sale || tool.is_featured
+          ? 'border-amber-500/40 hover:border-amber-400'
+          : ''
       }`}
     >
       {/* Badges / Ribbons on Top */}
@@ -69,19 +67,13 @@ export const ToolCard: React.FC<ToolCardProps> = ({
 
       {/* Top Header Row */}
       <div>
-        <div className="flex items-start justify-between gap-3 pt-1">
+        <div className="flex items-start justify-between gap-3">
           {/* App Identity */}
           <div className="flex items-center gap-3">
-            {/* App Monogram / Icon */}
+                        {/* App Monogram / Icon */}
             <div
-              className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-lg transition ${
-                tool.is_for_sale
-                  ? 'bg-gradient-to-br from-amber-500/20 via-orange-500/20 to-amber-500/30 text-amber-300 border border-amber-500/50'
-                  : tool.is_featured
-                  ? 'bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-amber-500/30 text-amber-300 border border-amber-500/40'
-                  : 'bg-zinc-800/80 text-zinc-200 border border-zinc-700/60 group-hover:border-zinc-600'
-              }`}
-                        >
+              className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-base text-white transition bg-gradient-to-br from-indigo-500 to-purple-600 group-hover:from-amber-400 group-hover:to-orange-400`}
+            >
               {tool.name.slice(0, 2).toUpperCase()}
             </div>
 
@@ -131,19 +123,19 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           </button>
         </div>
 
-        {/* Tagline */}
-        <p className="mt-3.5 text-sm font-medium text-zinc-200 line-clamp-1">
+                {/* Tagline */}
+        <p className="mt-2.5 text-sm font-semibold text-zinc-100 leading-snug line-clamp-1">
           {tool.tagline}
         </p>
 
         {/* Description */}
-        <p className="mt-2 text-xs text-zinc-400 line-clamp-3 leading-relaxed">
+        <p className="mt-1.5 text-xs text-zinc-400 leading-snug line-clamp-2">
           {tool.description}
         </p>
 
         {/* Startup For Sale Highlights Box */}
         {tool.is_for_sale && (
-          <div className="mt-4 p-3.5 rounded-xl bg-[#0a0a12] border border-amber-500/30 shadow-inner">
+          <div className="mt-3 p-2.5 rounded-lg bg-slate-950/60 border border-amber-500/30 shadow-inner">
             <div className="grid grid-cols-3 gap-2 text-center">
               {/* Asking Price */}
               <div className="bg-zinc-900/80 p-2 rounded-lg border border-amber-500/20">
@@ -201,11 +193,11 @@ export const ToolCard: React.FC<ToolCardProps> = ({
         )}
       </div>
 
-      {/* Footer Meta: Category, Pricing, & CTAs */}
-      <div className="mt-5 pt-3.5 border-t border-zinc-800/60 flex items-center justify-between gap-2">
+            {/* Footer Meta: Category, Pricing, & CTAs */}
+      <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           {/* Category Tag */}
-          <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-900 text-zinc-400 border border-zinc-800">
+          <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-800/70 text-slate-300 border border-slate-700/60">
             {tool.category}
           </span>
 
@@ -221,13 +213,14 @@ export const ToolCard: React.FC<ToolCardProps> = ({
 
         {/* CTAs */}
         <div className="flex items-center gap-2">
-          {tool.is_for_sale ? (
+                    {tool.is_for_sale ? (
             <button
+              id={`btn-acquire-${tool.id}`}
               onClick={() => onOpenAcquisition && onOpenAcquisition(tool)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-zinc-950 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-sm shadow-amber-500/20 active:scale-95 transition"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-zinc-950 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-sm shadow-amber-500/30 active:scale-95 transition"
             >
-              <span>Acquire / Contact</span>
-              <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.5]" />
+              <ShoppingBag className="w-3.5 h-3.5 fill-zinc-950" />
+              <span>Make Offer</span>
             </button>
           ) : (
             !tool.is_featured && onOpenUpgradeForTool && (
