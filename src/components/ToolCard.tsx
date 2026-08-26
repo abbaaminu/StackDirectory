@@ -26,16 +26,16 @@ export const ToolCard: React.FC<ToolCardProps> = ({
 
                 const getPricingBadgeColor = (type: string) => {
     switch (type) {
-      case 'Free':
-        return 'bg-emerald-950/80 text-emerald-400 border border-emerald-500/40 px-2.5 py-0.5 rounded-full text-xs font-semibold';
+            case 'Free':
+        return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded-md text-xs font-semibold';
       case 'Freemium':
-        return 'bg-cyan-950/80 text-cyan-400 border border-cyan-500/40 px-2.5 py-0.5 rounded-full text-xs font-semibold';
+        return 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2.5 py-0.5 rounded-md text-xs font-semibold';
       case 'Open Source':
-        return 'bg-fuchsia-950/80 text-fuchsia-400 border border-fuchsia-500/40 px-2.5 py-0.5 rounded-full text-xs font-semibold';
+        return 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/40 px-2.5 py-0.5 rounded-md text-xs font-semibold';
       case 'Paid':
-        return 'bg-purple-950/80 text-purple-400 border border-purple-500/40 px-2.5 py-0.5 rounded-full text-xs font-semibold';
+        return 'bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2.5 py-0.5 rounded-md text-xs font-semibold';
       default:
-        return 'bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-0.5 rounded-full text-xs';
+        return 'bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-0.5 rounded-md text-xs font-medium';
     }
   };
 
@@ -43,7 +43,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     <div
       id={`tool-card-${tool.id}`}
 
-      className={`group relative bg-[#131b2e] border border-slate-700/60 hover:border-amber-500/70 shadow-lg hover:shadow-amber-500/10 transition-all duration-300 rounded-xl p-5 flex flex-col justify-between ${
+      className={`group relative bg-slate-900/90 border border-slate-700/80 hover:border-amber-500/80 hover:shadow-[0_0_20px_rgba(245,158,11,0.15)] transition-all duration-300 rounded-xl p-5 flex flex-col justify-between ${
         tool.is_for_sale || tool.is_featured
           ? 'border-amber-500/40 hover:border-amber-400'
           : ''
@@ -85,7 +85,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="text-white font-semibold text-lg hover:text-amber-400 transition-colors"
+                  className="text-white font-bold text-lg hover:text-amber-400 transition-colors"
                   title={`Visit ${tool.website_url}`}
                 >
                   {tool.name}
@@ -96,7 +96,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                   </span>
                 )}
               </div>
-              <span className="text-xs text-zinc-500 font-mono">
+                            <span className="text-slate-400 text-xs">
                 {new URL(tool.website_url).hostname.replace('www.', '')}
               </span>
             </div>
@@ -106,10 +106,10 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           <button
             id={`btn-upvote-${tool.id}`}
             onClick={handleUpvote}
-            className={`flex flex-col items-center justify-center min-w-[50px] px-2.5 py-1.5 rounded-xl border transition active:scale-95 ${
+                        className={`flex flex-col items-center justify-center min-w-[50px] p-2 rounded-lg border transition-all active:scale-95 ${
               tool.user_has_upvoted
                 ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-sm shadow-amber-500/20'
-                : 'bg-zinc-900 hover:bg-zinc-800/90 border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                : 'bg-slate-800/80 hover:bg-amber-500/20 border border-slate-700 hover:border-amber-500/50 text-slate-300 hover:text-amber-400'
             } ${isUpvoteAnimating ? 'scale-110' : ''}`}
             title={tool.user_has_upvoted ? 'Remove upvote' : 'Upvote this startup'}
           >
@@ -129,8 +129,8 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           {tool.tagline}
         </p>
 
-        {/* Description */}
-        <p className="mt-1.5 text-xs text-zinc-400 leading-snug line-clamp-2">
+                {/* Description */}
+        <p className="text-slate-300 text-sm leading-relaxed line-clamp-2 my-3">
           {tool.description}
         </p>
 
@@ -198,7 +198,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
       <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           {/* Category Tag */}
-          <span className="bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-0.5 rounded-full text-xs">
+          <span className="bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-0.5 rounded-md text-xs font-medium">
             {tool.category}
           </span>
 

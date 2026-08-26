@@ -190,9 +190,9 @@ export default function App() {
   });
 
   return (
-        <div className="min-h-screen bg-[#0a0e17] text-white relative overflow-x-hidden">
-      {/* Ambient Radial Glow */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500/10 via-slate-950 to-slate-950" />
+                <div className="bg-[#0B0F17] min-h-screen text-slate-100 relative overflow-x-hidden">
+      {/* Ambient Header Glow */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(100%_50%_at_50%_0%,rgba(245,158,11,0.12)_0%,transparent_100%)]" />
             {/* Header with Submit App button */}
       <Header
         onOpenSubmit={() => setIsSubmitModalOpen(true)}
@@ -304,7 +304,7 @@ export default function App() {
             <p>{error}</p>
           </div>
         ) : displayedTools.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:grid-cols-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto px-4 py-8">
             {displayedTools.map((tool) => (
               <ToolCard
                 key={tool.id}
