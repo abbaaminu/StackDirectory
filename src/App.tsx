@@ -190,7 +190,9 @@ export default function App() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-[#090d16] text-white relative overflow-x-hidden">
+      {/* Soft Top Glow */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-96 bg-gradient-to-b from-amber-500/10 via-indigo-600/5 to-transparent" />
             {/* Header with Submit App button */}
       <Header
         onOpenSubmit={() => setIsSubmitModalOpen(true)}

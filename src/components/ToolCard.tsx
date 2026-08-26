@@ -24,16 +24,16 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     setTimeout(() => setIsUpvoteAnimating(false), 300);
   };
 
-    const getPricingBadgeColor = (type: string) => {
+        const getPricingBadgeColor = (type: string) => {
     switch (type) {
       case 'Free':
-        return 'bg-gradient-to-r from-cyan-500/20 to-teal-500/20 text-cyan-300 border-cyan-500/40';
+        return 'bg-gradient-to-r from-emerald-500/20 to-emerald-400/10 text-emerald-300 border-emerald-500/50 shadow-sm shadow-emerald-500/20';
       case 'Freemium':
-        return 'bg-gradient-to-r from-indigo-500/20 to-violet-500/20 text-indigo-300 border-indigo-500/40';
+        return 'bg-gradient-to-r from-cyan-500/20 to-cyan-400/10 text-cyan-300 border-cyan-500/50 shadow-sm shadow-cyan-500/20';
       case 'Open Source':
-        return 'bg-gradient-to-r from-fuchsia-500/20 to-purple-500/20 text-fuchsia-300 border-purple-500/40';
+        return 'bg-gradient-to-r from-fuchsia-500/20 to-purple-500/20 text-fuchsia-300 border-purple-500/50 shadow-sm shadow-purple-500/20';
       case 'Paid':
-        return 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border-amber-500/40';
+        return 'bg-gradient-to-r from-purple-500/20 to-purple-400/10 text-purple-300 border-purple-500/50 shadow-sm shadow-purple-500/20';
       default:
         return 'bg-slate-800 text-slate-300 border-slate-700';
     }
@@ -42,7 +42,8 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     return (
     <div
       id={`tool-card-${tool.id}`}
-      className={`group relative flex flex-col justify-between rounded-xl p-4 transition-all duration-200 bg-slate-900/80 border border-slate-800 hover:border-amber-500/40 hover:shadow-xl hover:shadow-amber-500/5 ${
+
+      className={`group relative flex flex-col justify-between rounded-xl p-4 transition-all duration-200 bg-[#0f1523] border border-slate-800/80 hover:border-amber-500/50 shadow-sm hover:shadow-amber-500/5 ${
         tool.is_for_sale || tool.is_featured
           ? 'border-amber-500/40 hover:border-amber-400'
           : ''
@@ -70,9 +71,9 @@ export const ToolCard: React.FC<ToolCardProps> = ({
         <div className="flex items-start justify-between gap-3">
           {/* App Identity */}
           <div className="flex items-center gap-3">
-                        {/* App Monogram / Icon */}
+                                                {/* App Monogram / Icon */}
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-base text-white transition bg-gradient-to-br from-indigo-500 to-purple-600 group-hover:from-amber-400 group-hover:to-orange-400`}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-base text-white shadow-md bg-gradient-to-br from-amber-500 via-orange-500 to-indigo-600`}
             >
               {tool.name.slice(0, 2).toUpperCase()}
             </div>

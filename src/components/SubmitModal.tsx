@@ -170,7 +170,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 <span className="text-sm font-black text-white">$0</span>
               </div>
               <p className="text-[11px] text-zinc-400 mt-2 leading-relaxed">
-                App is saved to Supabase review queue (<code className="text-zinc-300">is_approved = false</code>). Completely free $0 upfront fee.
+                Standard manual review. Submitted listings are verified by our team before going live—100% free.
               </p>
             </div>
 
