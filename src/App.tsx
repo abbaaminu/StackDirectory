@@ -3,7 +3,7 @@ import { Search, X, CheckCircle2, ShoppingBag, LayoutGrid } from 'lucide-react';
 import supabase from './lib/supabase';
 import type { Tool, PricingType } from './types/directory';
 import { Header } from './components/Header';
-import { ToolCard } from './components/ToolCard';
+import { ToolCard, ToolCardSkeleton } from './components/ToolCard';
 import { SubmitModal } from './components/SubmitModal';
 import { AcquisitionModal } from './components/AcquisitionModal';
 
@@ -297,7 +297,15 @@ export default function App() {
         </div>
 
         {loading ? (
-          <p className="text-slate-400">Loading approved tools…</p>
+          <div
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto px-4 py-8"
+            aria-busy="true"
+            aria-label="Loading tools"
+          >
+            {Array.from({ length: 6 }).map((_, index) => (
+              <ToolCardSkeleton key={index} />
+            ))}
+          </div>
         ) : error ? (
           <div className="border border-red-500/50 bg-red-500/10 rounded-lg p-4 text-red-200 text-sm">
             <p className="font-semibold mb-1">Failed to load tools</p>
