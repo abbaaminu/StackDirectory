@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   X,
   DollarSign,
@@ -10,9 +10,9 @@ import {
   AlertCircle,
   Sparkles,
   MessageSquare,
-} from 'lucide-react';
-import { Tool } from '../types/directory';
-import supabase from '../lib/supabase';
+} from "lucide-react";
+import { Tool } from "../types/directory";
+import supabase from "../lib/supabase";
 
 interface AcquisitionModalProps {
   isOpen: boolean;
@@ -25,10 +25,10 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
   onClose,
   tool,
 }) => {
-  const [buyerName, setBuyerName] = useState('');
-  const [buyerEmail, setBuyerEmail] = useState('');
-  const [offerAmount, setOfferAmount] = useState<string>('');
-  const [message, setMessage] = useState('');
+  const [buyerName, setBuyerName] = useState("");
+  const [buyerEmail, setBuyerEmail] = useState("");
+  const [offerAmount, setOfferAmount] = useState<string>("");
+  const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -43,37 +43,35 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
 
     // Basic validation
     if (!buyerName.trim()) {
-      setErrorMsg('Please provide your name.');
+      setErrorMsg("Please provide your name.");
       return;
     }
     if (!buyerEmail.trim()) {
-      setErrorMsg('Please provide your email.');
+      setErrorMsg("Please provide your email.");
       return;
     }
     const amount = parseFloat(offerAmount);
     if (isNaN(amount) || amount <= 0) {
-      setErrorMsg('Please enter a valid offer amount in USD.');
+      setErrorMsg("Please enter a valid offer amount in USD.");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase
-        .from('acquisition_offers')
-        .insert({
-          tool_id: tool.id,
-          buyer_name: buyerName.trim(),
-          buyer_email: buyerEmail.trim(),
-          offer_amount: amount,
-          message: message.trim() || null,
-          status: 'pending',
-        } as never);
+      const { error } = await supabase.from("acquisition_offers").insert({
+        tool_id: tool.id,
+        buyer_name: buyerName.trim(),
+        buyer_email: buyerEmail.trim(),
+        offer_amount: amount,
+        message: message.trim() || null,
+        status: "pending",
+      } as never);
 
       if (error) {
-        console.error('[Acquisition] Failed to insert offer:', error.message);
+        console.error("[Acquisition] Failed to insert offer:", error.message);
         setErrorMsg(
-          'Could not submit your offer. Please try again in a moment.'
+          "Could not submit your offer. Please try again in a moment.",
         );
         setIsSubmitting(false);
         return;
@@ -82,18 +80,20 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
       setIsSubmitting(false);
       setHasSubmitted(true);
     } catch (err) {
-      console.error('[Acquisition] Unexpected error:', err);
-      setErrorMsg('Something went wrong submitting your offer. Please try again.');
+      console.error("[Acquisition] Unexpected error:", err);
+      setErrorMsg(
+        "Something went wrong submitting your offer. Please try again.",
+      );
       setIsSubmitting(false);
     }
   };
 
   const handleClose = () => {
     // Reset form state when closing so it's fresh next time
-    setBuyerName('');
-    setBuyerEmail('');
-    setOfferAmount('');
-    setMessage('');
+    setBuyerName("");
+    setBuyerEmail("");
+    setOfferAmount("");
+    setMessage("");
     setErrorMsg(null);
     setHasSubmitted(false);
     onClose();
@@ -117,7 +117,9 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
             <Sparkles className="w-3.5 h-3.5 fill-zinc-950" />
             MAKE AN OFFER
           </span>
-          <span className="text-[11px] text-zinc-500 font-mono">ID: {tool.id}</span>
+          <span className="text-[11px] text-zinc-500 font-mono">
+            ID: {tool.id}
+          </span>
         </div>
 
         <div className="flex items-start justify-between gap-4">
@@ -146,20 +148,18 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
           /* Confirmation State */
           <div className="mt-6 p-6 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-3">
             <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
-            <h4 className="text-base font-bold text-white">
-              Offer submitted!
-            </h4>
+            <h4 className="text-base font-bold text-white">Offer submitted!</h4>
             <p className="text-sm text-zinc-300 max-w-sm mx-auto leading-relaxed">
               The startup owner and StackBuild team will review your inquiry.
             </p>
             <div className="text-xs text-zinc-400 space-y-1 pt-1">
               <p>
-                <span className="text-zinc-500">Buyer:</span>{' '}
-                {buyerName} · {buyerEmail}
+                <span className="text-zinc-500">Buyer:</span> {buyerName} ·{" "}
+                {buyerEmail}
               </p>
               <p>
                 <span className="text-zinc-500">Offer:</span> $
-                {parseFloat(offerAmount || '0').toLocaleString()} USD
+                {parseFloat(offerAmount || "0").toLocaleString()} USD
               </p>
             </div>
             <button
@@ -221,7 +221,7 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
                   required
                   min={1}
                   step="any"
-                  placeholder={askingPrice ? `${askingPrice}` : '25000'}
+                  placeholder={askingPrice ? `${askingPrice}` : "25000"}
                   value={offerAmount}
                   onChange={(e) => setOfferAmount(e.target.value)}
                   className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-slate-900 text-white text-sm border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/40 outline-none transition placeholder:text-zinc-600"
@@ -229,7 +229,8 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
               </div>
               {askingPrice > 0 && (
                 <p className="text-[11px] text-zinc-500 mt-1">
-                  Asking price is ${askingPrice.toLocaleString()}. Offers may be negotiated.
+                  Asking price is ${askingPrice.toLocaleString()}. Offers may be
+                  negotiated.
                 </p>
               )}
             </div>
@@ -295,10 +296,9 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
                 )}
               </button>
             </div>
-                    </form>
+          </form>
         )}
       </div>
     </div>
   );
 };
-

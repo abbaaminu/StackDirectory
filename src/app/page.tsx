@@ -1,20 +1,20 @@
-import { useState, useEffect } from 'react';
-import supabase from '../lib/supabase';
-import type { Tool } from '../types/directory';
-import { ToolCardSkeleton } from '../components/ToolCard';
+import { useState, useEffect } from "react";
+import supabase from "../lib/supabase";
+import type { Tool } from "../types/directory";
+import { ToolCardSkeleton } from "../components/ToolCard";
 
 const getPricingBadgeColor = (type: string) => {
   switch (type) {
-        case 'Free':
-          return 'bg-emerald-500/30 text-emerald-200 border border-emerald-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
-        case 'Freemium':
-          return 'bg-cyan-500/30 text-cyan-200 border border-cyan-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
-        case 'Open Source':
-          return 'bg-fuchsia-500/30 text-fuchsia-200 border border-fuchsia-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
-        case 'Paid':
-          return 'bg-purple-500/30 text-purple-200 border border-purple-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
-        default:
-          return 'bg-slate-600 text-white border border-slate-400 px-3 py-1 rounded-full text-xs font-semibold';
+    case "Free":
+      return "bg-emerald-500/30 text-emerald-200 border border-emerald-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider";
+    case "Freemium":
+      return "bg-cyan-500/30 text-cyan-200 border border-cyan-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider";
+    case "Open Source":
+      return "bg-fuchsia-500/30 text-fuchsia-200 border border-fuchsia-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider";
+    case "Paid":
+      return "bg-purple-500/30 text-purple-200 border border-purple-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider";
+    default:
+      return "bg-slate-600 text-white border border-slate-400 px-3 py-1 rounded-full text-xs font-semibold";
   }
 };
 
@@ -29,21 +29,21 @@ export default function HomePage() {
         setLoading(true);
 
         const { data, error } = await supabase
-          .from('tools')
-          .select('*')
-          .eq('is_approved', true)
-          .order('upvotes', { ascending: false });
+          .from("tools")
+          .select("*")
+          .eq("is_approved", true)
+          .order("upvotes", { ascending: false });
 
         if (error) {
-          console.error('Failed to load tools:', error.message);
+          console.error("Failed to load tools:", error.message);
           setError(error.message);
           return;
         }
 
         setTools((data as Tool[]) ?? []);
       } catch (err) {
-        console.error('Unexpected error fetching tools:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch tools');
+        console.error("Unexpected error fetching tools:", err);
+        setError(err instanceof Error ? err.message : "Failed to fetch tools");
       } finally {
         setLoading(false);
       }
@@ -52,7 +52,7 @@ export default function HomePage() {
     fetchApprovedTools();
   }, []);
 
-    return (
+  return (
     <main className="relative min-h-screen bg-[#0a0e1a] text-white overflow-x-hidden">
       {/* Top Section Gradient Glow */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500/15 via-slate-950 to-slate-950" />
@@ -92,7 +92,9 @@ export default function HomePage() {
                     <span className="bg-slate-600 text-white border border-slate-400/70 px-3 py-1 rounded-full text-xs font-semibold">
                       {tool.category}
                     </span>
-                    <span className={`${getPricingBadgeColor(tool.pricing_type)}`}>
+                    <span
+                      className={`${getPricingBadgeColor(tool.pricing_type)}`}
+                    >
                       {tool.pricing_type}
                     </span>
                   </div>
@@ -100,7 +102,10 @@ export default function HomePage() {
 
                 <div className="mt-4 pt-3 border-t border-slate-600/60 flex justify-between items-center text-xs text-slate-300">
                   <span>
-                    Upvotes: <span className="font-semibold text-white">{tool.upvotes}</span>
+                    Upvotes:{" "}
+                    <span className="font-semibold text-white">
+                      {tool.upvotes}
+                    </span>
                   </span>
                 </div>
               </div>

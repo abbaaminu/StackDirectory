@@ -1,4 +1,4 @@
-export type PricingType = 'Free' | 'Freemium' | 'Paid' | 'Open Source';
+export type PricingType = "Free" | "Freemium" | "Paid" | "Open Source";
 
 export interface Tool {
   id: string;
@@ -39,7 +39,7 @@ export interface SubmissionFormState {
   website_url: string;
   category: string;
   pricing_type: PricingType;
-  tier: 'free' | 'paddle_featured';
+  tier: "free" | "paddle_featured";
   customer_email?: string;
 
   // Startup Marketplace Fields
@@ -53,7 +53,8 @@ export interface SubmissionFormState {
 
 export interface PaddleWebhookPayload {
   event_id: string;
-  event_type: 'transaction.completed' | 'transaction.created' | 'subscription.created';
+  event_type:
+    "transaction.completed" | "transaction.created" | "subscription.created";
   occurred_at: string;
   data: {
     id: string;
@@ -76,8 +77,7 @@ export interface PaddleWebhookPayload {
 export interface CodeFile {
   filename: string;
   filepath: string;
-  language: 'sql' | 'typescript' | 'tsx' | 'bash' | 'env';
+  language: "sql" | "typescript" | "tsx" | "bash" | "env";
   description: string;
   code: string;
 }
-

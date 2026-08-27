@@ -1,11 +1,12 @@
-import { CodeFile } from '../types/directory';
+import { CodeFile } from "../types/directory";
 
 export const CODE_FILES: CodeFile[] = [
   {
-    filename: '02_marketplace_migration.sql',
-    filepath: 'supabase/migrations/02_marketplace_migration.sql',
-    language: 'sql',
-    description: 'Supabase SQL Schema Migration adding startup marketplace, financial metrics, and tech stack fields to the tools table.',
+    filename: "02_marketplace_migration.sql",
+    filepath: "supabase/migrations/02_marketplace_migration.sql",
+    language: "sql",
+    description:
+      "Supabase SQL Schema Migration adding startup marketplace, financial metrics, and tech stack fields to the tools table.",
     code: `-- ==============================================================================
 -- SUPABASE SQL SCHEMA MIGRATION: Startup Acquisition Marketplace & Metrics
 -- ==============================================================================
@@ -28,13 +29,14 @@ COMMENT ON COLUMN public.tools.asking_price IS 'Target acquisition price in USD'
 COMMENT ON COLUMN public.tools.monthly_revenue IS 'Monthly Recurring Revenue (MRR) in USD';
 COMMENT ON COLUMN public.tools.monthly_profit IS 'Net monthly profit after operational expenses in USD';
 COMMENT ON COLUMN public.tools.seller_contact IS 'Founder contact email, Telegram handle, or listing URL';
-COMMENT ON COLUMN public.tools.tech_stack IS 'Array of technologies utilized (e.g. Next.js, Supabase, Tailwind, Stripe)';`
+COMMENT ON COLUMN public.tools.tech_stack IS 'Array of technologies utilized (e.g. Next.js, Supabase, Tailwind, Stripe)';`,
   },
   {
-    filename: '01_schema.sql',
-    filepath: 'supabase/migrations/01_schema.sql',
-    language: 'sql',
-    description: 'Complete PostgreSQL database schema with RLS policies, indexes, marketplace columns, and atomic upvote RPC for Supabase.',
+    filename: "01_schema.sql",
+    filepath: "supabase/migrations/01_schema.sql",
+    language: "sql",
+    description:
+      "Complete PostgreSQL database schema with RLS policies, indexes, marketplace columns, and atomic upvote RPC for Supabase.",
     code: `-- 1. Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -146,13 +148,14 @@ BEGIN
         'upvotes', new_count
     );
 END;
-$$;`
+$$;`,
   },
   {
-    filename: 'page.tsx',
-    filepath: 'app/page.tsx',
-    language: 'tsx',
-    description: 'Next.js 14/15 App Router Server Component Homepage with Search, Category Filter Pills, and Marketplace Card Layout.',
+    filename: "page.tsx",
+    filepath: "app/page.tsx",
+    language: "tsx",
+    description:
+      "Next.js 14/15 App Router Server Component Homepage with Search, Category Filter Pills, and Marketplace Card Layout.",
     code: `import { Suspense } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { DirectoryHero } from '@/components/DirectoryHero';
@@ -192,13 +195,14 @@ export default async function HomePage() {
       </div>
     </main>
   );
-}`
+}`,
   },
   {
-    filename: 'route.ts',
-    filepath: 'app/api/webhooks/paddle/route.ts',
-    language: 'typescript',
-    description: 'Next.js App Router Webhook Route Handler for Paddle ($19 USD Instant Featured). Verifies HMAC signature and upgrades tool.',
+    filename: "route.ts",
+    filepath: "app/api/webhooks/paddle/route.ts",
+    language: "typescript",
+    description:
+      "Next.js App Router Webhook Route Handler for Paddle ($19 USD Instant Featured). Verifies HMAC signature and upgrades tool.",
     code: `import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase/server';
@@ -316,25 +320,27 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}`
+}`,
   },
   {
-    filename: 'client.ts',
-    filepath: 'lib/supabase/client.ts',
-    language: 'typescript',
-    description: 'Browser-safe Supabase client configured with Public Anon Key.',
+    filename: "client.ts",
+    filepath: "lib/supabase/client.ts",
+    language: "typescript",
+    description:
+      "Browser-safe Supabase client configured with Public Anon Key.",
     code: `import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);`
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);`,
   },
   {
-    filename: 'server.ts',
-    filepath: 'lib/supabase/server.ts',
-    language: 'typescript',
-    description: 'Server-side Supabase Admin Client using Service Role Key (Used in Paddle Webhook handler).',
+    filename: "server.ts",
+    filepath: "lib/supabase/server.ts",
+    language: "typescript",
+    description:
+      "Server-side Supabase Admin Client using Service Role Key (Used in Paddle Webhook handler).",
     code: `import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -349,13 +355,14 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
     persistSession: false,
     autoRefreshToken: false,
   },
-});`
+});`,
   },
   {
-    filename: 'database.ts',
-    filepath: 'types/database.ts',
-    language: 'typescript',
-    description: 'TypeScript interfaces mapped directly to Supabase table definitions including marketplace fields.',
+    filename: "database.ts",
+    filepath: "types/database.ts",
+    language: "typescript",
+    description:
+      "TypeScript interfaces mapped directly to Supabase table definitions including marketplace fields.",
     code: `export type PricingType = 'Free' | 'Freemium' | 'Paid' | 'Open Source';
 
 export interface Tool {
@@ -400,13 +407,14 @@ export interface SubmitToolPayload {
   monthly_profit?: number;
   seller_contact?: string;
   tech_stack?: string[];
-}`
+}`,
   },
   {
-    filename: '.env.local.example',
-    filepath: '.env.local.example',
-    language: 'env',
-    description: 'Environment variables required for Supabase & Paddle integration in Next.js.',
+    filename: ".env.local.example",
+    filepath: ".env.local.example",
+    language: "env",
+    description:
+      "Environment variables required for Supabase & Paddle integration in Next.js.",
     code: `# Supabase Credentials (Found in Supabase Project Settings -> API)
 NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -417,7 +425,6 @@ NEXT_PUBLIC_PADDLE_CLIENT_TOKEN="live_..." # Or test_...
 NEXT_PUBLIC_PADDLE_ENV="sandbox" # 'sandbox' or 'production'
 PADDLE_API_KEY="pdl_..."
 PADDLE_WEBHOOK_SECRET_KEY="pdl_ntf_set_..." # Found in Paddle Notifications / Webhooks settings
-NEXT_PUBLIC_PADDLE_FEATURED_PRICE_ID="pri_01h..." # $19 flat fee one-time product price ID`
-  }
+NEXT_PUBLIC_PADDLE_FEATURED_PRICE_ID="pri_01h..." # $19 flat fee one-time product price ID`,
+  },
 ];
-

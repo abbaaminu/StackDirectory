@@ -1,6 +1,16 @@
-import React, { useState } from 'react';
-import { X, Webhook, Play, CheckCircle2, Copy, Check, ShieldCheck, RefreshCw, Terminal } from 'lucide-react';
-import { Tool, PaddleWebhookPayload } from '../types/directory';
+import React, { useState } from "react";
+import {
+  X,
+  Webhook,
+  Play,
+  CheckCircle2,
+  Copy,
+  Check,
+  ShieldCheck,
+  RefreshCw,
+  Terminal,
+} from "lucide-react";
+import { Tool, PaddleWebhookPayload } from "../types/directory";
 
 interface PaddleWebhookSimulatorProps {
   isOpen: boolean;
@@ -18,10 +28,15 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
   selectedToolId,
 }) => {
   const [targetToolId, setTargetToolId] = useState<string>(
-    selectedToolId || tools.find((t) => !t.is_featured)?.id || tools[0]?.id || ''
+    selectedToolId ||
+      tools.find((t) => !t.is_featured)?.id ||
+      tools[0]?.id ||
+      "",
   );
-  const [eventType, setEventType] = useState<'transaction.completed' | 'transaction.created'>('transaction.completed');
-  const [amount, setAmount] = useState('19.00');
+  const [eventType, setEventType] = useState<
+    "transaction.completed" | "transaction.created"
+  >("transaction.completed");
+  const [amount, setAmount] = useState("19.00");
   const [isSimulating, setIsSimulating] = useState(false);
   const [webhookResponse, setWebhookResponse] = useState<any | null>(null);
   const [copied, setCopied] = useState(false);
@@ -36,17 +51,19 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
     occurred_at: new Date().toISOString(),
     data: {
       id: `txn_${Math.random().toString(36).substring(2, 10)}`,
-      status: 'completed',
-      customer_id: targetTool?.paddle_customer_id || `ctm_pdl_${Math.random().toString(36).substring(2, 8)}`,
+      status: "completed",
+      customer_id:
+        targetTool?.paddle_customer_id ||
+        `ctm_pdl_${Math.random().toString(36).substring(2, 8)}`,
       custom_data: {
         tool_id: targetToolId,
-        plan_type: 'directory_featured_lifetime',
-        submitted_by: 'founder@startup.com',
+        plan_type: "directory_featured_lifetime",
+        submitted_by: "founder@startup.com",
       },
       details: {
         totals: {
           total: amount,
-          currency_code: 'USD',
+          currency_code: "USD",
         },
       },
     },
@@ -59,11 +76,11 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
     setTimeout(() => {
       setIsSimulating(false);
 
-      if (eventType === 'transaction.completed') {
+      if (eventType === "transaction.completed") {
         onTriggerWebhookUpgrade(targetToolId, mockPayload.data.customer_id);
         setWebhookResponse({
           status: 200,
-          statusText: 'OK',
+          statusText: "OK",
           data: {
             success: true,
             message: `Tool "${targetTool?.name || targetToolId}" successfully upgraded to Featured & Approved via Paddle Webhook.`,
@@ -78,10 +95,11 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
       } else {
         setWebhookResponse({
           status: 200,
-          statusText: 'OK',
+          statusText: "OK",
           data: {
             received: true,
-            message: 'Event acknowledged, no directory upgrade triggered for uncompleted status.',
+            message:
+              "Event acknowledged, no directory upgrade triggered for uncompleted status.",
           },
         });
       }
@@ -118,7 +136,8 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
               </span>
             </h2>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Simulate Paddle Billing v2 events to test automated Supabase database upgrades.
+              Simulate Paddle Billing v2 events to test automated Supabase
+              database upgrades.
             </p>
           </div>
         </div>
@@ -136,7 +155,12 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
             >
               {tools.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.name} {t.is_featured ? '★ [Already Featured]' : t.is_approved ? '✓ [Approved]' : '⏳ [Pending Queue]'}
+                  {t.name}{" "}
+                  {t.is_featured
+                    ? "★ [Already Featured]"
+                    : t.is_approved
+                      ? "✓ [Approved]"
+                      : "⏳ [Pending Queue]"}
                 </option>
               ))}
             </select>
@@ -151,8 +175,12 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
               onChange={(e) => setEventType(e.target.value as any)}
               className="w-full px-3 py-2 rounded-lg bg-zinc-950 text-xs text-zinc-200 border border-zinc-700 focus:border-amber-500 outline-none cursor-pointer"
             >
-              <option value="transaction.completed">transaction.completed (Triggers Upgrade)</option>
-              <option value="transaction.created">transaction.created (Pending checkout)</option>
+              <option value="transaction.completed">
+                transaction.completed (Triggers Upgrade)
+              </option>
+              <option value="transaction.created">
+                transaction.created (Pending checkout)
+              </option>
             </select>
           </div>
         </div>
@@ -168,8 +196,12 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
               onClick={handleCopyPayload}
               className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 px-2 py-1 rounded border border-zinc-800 transition"
             >
-              {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-              <span>{copied ? 'Copied' : 'Copy JSON'}</span>
+              {copied ? (
+                <Check className="w-3 h-3 text-emerald-400" />
+              ) : (
+                <Copy className="w-3 h-3" />
+              )}
+              <span>{copied ? "Copied" : "Copy JSON"}</span>
             </button>
           </div>
 
@@ -182,7 +214,10 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
         <div className="mt-5 flex items-center justify-between gap-3">
           <div className="text-[11px] text-zinc-400 flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Includes simulated HMAC-SHA256 <code className="text-zinc-300">paddle-signature</code> header</span>
+            <span>
+              Includes simulated HMAC-SHA256{" "}
+              <code className="text-zinc-300">paddle-signature</code> header
+            </span>
           </div>
 
           <button

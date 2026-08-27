@@ -1,7 +1,18 @@
-import React, { useState } from 'react';
-import { X, Copy, Check, FileCode, Database, Code2, Layers, KeyRound, Download, ExternalLink } from 'lucide-react';
-import { CODE_FILES } from '../data/nextjsCodebase';
-import { CodeFile } from '../types/directory';
+import React, { useState } from "react";
+import {
+  X,
+  Copy,
+  Check,
+  FileCode,
+  Database,
+  Code2,
+  Layers,
+  KeyRound,
+  Download,
+  ExternalLink,
+} from "lucide-react";
+import { CODE_FILES } from "../data/nextjsCodebase";
+import { CodeFile } from "../types/directory";
 
 interface CodeViewerModalProps {
   isOpen: boolean;
@@ -28,8 +39,9 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
 
   const handleCopyAll = () => {
     const allCode = CODE_FILES.map(
-      (f) => `// ==========================================\n// FILE: ${f.filepath}\n// DESCRIPTION: ${f.description}\n// ==========================================\n\n${f.code}`
-    ).join('\n\n\n');
+      (f) =>
+        `// ==========================================\n// FILE: ${f.filepath}\n// DESCRIPTION: ${f.description}\n// ==========================================\n\n${f.code}`,
+    ).join("\n\n\n");
 
     navigator.clipboard.writeText(allCode);
     setCopiedAll(true);
@@ -38,12 +50,12 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
 
   const getFileIcon = (lang: string) => {
     switch (lang) {
-      case 'sql':
+      case "sql":
         return <Database className="w-3.5 h-3.5 text-blue-400" />;
-      case 'typescript':
-      case 'tsx':
+      case "typescript":
+      case "tsx":
         return <FileCode className="w-3.5 h-3.5 text-amber-400" />;
-      case 'env':
+      case "env":
         return <KeyRound className="w-3.5 h-3.5 text-emerald-400" />;
       default:
         return <Code2 className="w-3.5 h-3.5 text-zinc-400" />;
@@ -67,7 +79,8 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
                 </span>
               </h2>
               <p className="text-xs text-zinc-400">
-                Complete Next.js 15, Supabase PostgreSQL schema, and Paddle Webhook Route Handler.
+                Complete Next.js 15, Supabase PostgreSQL schema, and Paddle
+                Webhook Route Handler.
               </p>
             </div>
           </div>
@@ -77,8 +90,12 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
               onClick={handleCopyAll}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-950 bg-amber-400 hover:bg-amber-300 transition active:scale-95 shadow-sm"
             >
-              {copiedAll ? <Check className="w-3.5 h-3.5 text-zinc-950 stroke-[3]" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedAll ? 'All Files Copied!' : 'Copy All Files'}</span>
+              {copiedAll ? (
+                <Check className="w-3.5 h-3.5 text-zinc-950 stroke-[3]" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
+              <span>{copiedAll ? "All Files Copied!" : "Copy All Files"}</span>
             </button>
 
             <button
@@ -105,15 +122,17 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
                   onClick={() => setActiveFileIndex(idx)}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-mono text-left transition ${
                     isActive
-                      ? 'bg-zinc-800 text-white font-semibold border border-zinc-700 shadow-sm'
-                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+                      ? "bg-zinc-800 text-white font-semibold border border-zinc-700 shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60"
                   }`}
                 >
                   <div className="flex items-center gap-2 truncate">
                     {getFileIcon(file.language)}
                     <span className="truncate">{file.filename}</span>
                   </div>
-                  <span className="text-[10px] text-zinc-500 uppercase">{file.language}</span>
+                  <span className="text-[10px] text-zinc-500 uppercase">
+                    {file.language}
+                  </span>
                 </button>
               );
             })}
@@ -122,9 +141,18 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
             <div className="mt-4 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 text-[11px] text-zinc-400 space-y-2">
               <div className="font-bold text-zinc-300">Stack Highlights:</div>
               <ul className="space-y-1 list-disc list-inside text-zinc-400 leading-relaxed text-[11px]">
-                <li><strong className="text-zinc-200">Supabase:</strong> Row-level security, uuid extension, and atomic upvote RPC.</li>
-                <li><strong className="text-zinc-200">Next.js 15:</strong> Server-side data fetching with ISR revalidation.</li>
-                <li><strong className="text-zinc-200">Paddle:</strong> Webhook signature verification and instant DB upgrade.</li>
+                <li>
+                  <strong className="text-zinc-200">Supabase:</strong> Row-level
+                  security, uuid extension, and atomic upvote RPC.
+                </li>
+                <li>
+                  <strong className="text-zinc-200">Next.js 15:</strong>{" "}
+                  Server-side data fetching with ISR revalidation.
+                </li>
+                <li>
+                  <strong className="text-zinc-200">Paddle:</strong> Webhook
+                  signature verification and instant DB upgrade.
+                </li>
               </ul>
             </div>
           </div>
@@ -145,7 +173,9 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
               </div>
 
               <button
-                onClick={() => handleCopySingle(currentFile.code, activeFileIndex)}
+                onClick={() =>
+                  handleCopySingle(currentFile.code, activeFileIndex)
+                }
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 transition"
               >
                 {copiedFileIndex === activeFileIndex ? (

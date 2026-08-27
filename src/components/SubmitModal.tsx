@@ -1,7 +1,21 @@
-import React, { useState } from 'react';
-import { X, Sparkles, Zap, ShieldAlert, CheckCircle2, ArrowRight, CreditCard, Lock, DollarSign, TrendingUp, Cpu, Mail, ShoppingBag } from 'lucide-react';
-import { PricingType, SubmissionFormState, Tool } from '../types/directory';
-import { CATEGORIES } from '../data/mockTools';
+import React, { useState } from "react";
+import {
+  X,
+  Sparkles,
+  Zap,
+  ShieldAlert,
+  CheckCircle2,
+  ArrowRight,
+  CreditCard,
+  Lock,
+  DollarSign,
+  TrendingUp,
+  Cpu,
+  Mail,
+  ShoppingBag,
+} from "lucide-react";
+import { PricingType, SubmissionFormState, Tool } from "../types/directory";
+import { CATEGORIES } from "../data/mockTools";
 
 interface SubmitModalProps {
   isOpen: boolean;
@@ -15,50 +29,63 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
   onSubmitTool,
 }) => {
   const [formData, setFormData] = useState<SubmissionFormState>({
-    name: '',
-    tagline: '',
-    description: '',
-    website_url: '',
-    category: 'Developer Tools',
-    pricing_type: 'Freemium',
-    tier: 'free',
-    customer_email: '',
+    name: "",
+    tagline: "",
+    description: "",
+    website_url: "",
+    category: "Developer Tools",
+    pricing_type: "Freemium",
+    tier: "free",
+    customer_email: "",
     is_for_sale: false,
-    asking_price: '',
-    monthly_revenue: '',
-    monthly_profit: '',
-    seller_contact: '',
-    tech_stack: 'Next.js, Supabase, Tailwind CSS',
+    asking_price: "",
+    monthly_revenue: "",
+    monthly_profit: "",
+    seller_contact: "",
+    tech_stack: "Next.js, Supabase, Tailwind CSS",
   });
 
   const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
   const [showCheckoutSuccess, setShowCheckoutSuccess] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState("");
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
+    setErrorMsg("");
 
-    if (!formData.name.trim() || !formData.tagline.trim() || !formData.website_url.trim()) {
-      setErrorMsg('Please fill in all required fields (Name, Tagline, and Website URL).');
+    if (
+      !formData.name.trim() ||
+      !formData.tagline.trim() ||
+      !formData.website_url.trim()
+    ) {
+      setErrorMsg(
+        "Please fill in all required fields (Name, Tagline, and Website URL).",
+      );
       return;
     }
 
     if (formData.is_for_sale) {
       if (!formData.asking_price || Number(formData.asking_price) <= 0) {
-        setErrorMsg('Please enter a valid Asking Price for your startup listing.');
+        setErrorMsg(
+          "Please enter a valid Asking Price for your startup listing.",
+        );
         return;
       }
       if (!formData.seller_contact?.trim()) {
-        setErrorMsg('Please provide a seller contact email or link for potential buyers.');
+        setErrorMsg(
+          "Please provide a seller contact email or link for potential buyers.",
+        );
         return;
       }
     }
 
     let normalizedUrl = formData.website_url.trim();
-    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
+    if (
+      !normalizedUrl.startsWith("http://") &&
+      !normalizedUrl.startsWith("https://")
+    ) {
       normalizedUrl = `https://${normalizedUrl}`;
     }
 
@@ -66,7 +93,10 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
 
     // Parse tech stack array
     const parsedTechStack = formData.tech_stack
-      ? formData.tech_stack.split(',').map((s) => s.trim()).filter(Boolean)
+      ? formData.tech_stack
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
       : [];
 
     const baseTool: Tool = {
@@ -75,28 +105,37 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       tagline: formData.tagline.trim(),
       description: formData.description.trim() || formData.tagline.trim(),
       website_url: normalizedUrl,
-      category: formData.category === 'All' ? 'Developer Tools' : formData.category,
+      category:
+        formData.category === "All" ? "Developer Tools" : formData.category,
       pricing_type: formData.pricing_type,
-      upvotes: formData.tier === 'paddle_featured' ? 1 : 0,
-      is_approved: formData.tier === 'paddle_featured', // Instant approval with Paddle
-      is_featured: formData.tier === 'paddle_featured', // Instant boost with Paddle
+      upvotes: formData.tier === "paddle_featured" ? 1 : 0,
+      is_approved: formData.tier === "paddle_featured", // Instant approval with Paddle
+      is_featured: formData.tier === "paddle_featured", // Instant boost with Paddle
       paddle_customer_id:
-        formData.tier === 'paddle_featured'
+        formData.tier === "paddle_featured"
           ? `ctm_pdl_${Math.random().toString(36).substring(2, 9)}`
           : null,
       created_at: new Date().toISOString(),
-      user_has_upvoted: formData.tier === 'paddle_featured',
+      user_has_upvoted: formData.tier === "paddle_featured",
 
       // Startup Marketplace fields
       is_for_sale: formData.is_for_sale,
-      asking_price: formData.is_for_sale ? Number(formData.asking_price) || 0 : undefined,
-      monthly_revenue: formData.is_for_sale ? Number(formData.monthly_revenue) || 0 : 0,
-      monthly_profit: formData.is_for_sale ? Number(formData.monthly_profit) || 0 : 0,
-      seller_contact: formData.is_for_sale ? formData.seller_contact?.trim() : undefined,
+      asking_price: formData.is_for_sale
+        ? Number(formData.asking_price) || 0
+        : undefined,
+      monthly_revenue: formData.is_for_sale
+        ? Number(formData.monthly_revenue) || 0
+        : 0,
+      monthly_profit: formData.is_for_sale
+        ? Number(formData.monthly_profit) || 0
+        : 0,
+      seller_contact: formData.is_for_sale
+        ? formData.seller_contact?.trim()
+        : undefined,
       tech_stack: formData.is_for_sale ? parsedTechStack : undefined,
     };
 
-    if (formData.tier === 'paddle_featured') {
+    if (formData.tier === "paddle_featured") {
       // Simulate Paddle Checkout flow ($19 USD)
       setIsProcessingCheckout(true);
       setTimeout(() => {
@@ -137,7 +176,8 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
             Submit to StackDirectory
           </h2>
           <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-            Standard directory listings are 100% free. Upgrade to Instant Featured Launch with Paddle ($19 USD flat fee).
+            Standard directory listings are 100% free. Upgrade to Instant
+            Featured Launch with Paddle ($19 USD flat fee).
           </p>
         </div>
 
@@ -153,16 +193,18 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             {/* Free Tier Card (100% Free) */}
             <div
-              onClick={() => setFormData({ ...formData, tier: 'free' })}
+              onClick={() => setFormData({ ...formData, tier: "free" })}
               className={`cursor-pointer rounded-xl p-4 border transition-all ${
-                formData.tier === 'free'
-                  ? 'bg-zinc-800/80 border-zinc-500 ring-1 ring-zinc-400'
-                  : 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700'
+                formData.tier === "free"
+                  ? "bg-zinc-800/80 border-zinc-500 ring-1 ring-zinc-400"
+                  : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
               }`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Free Submission</span>
+                  <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                    Free Submission
+                  </span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
                     100% FREE
                   </span>
@@ -170,17 +212,20 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 <span className="text-sm font-black text-white">$0</span>
               </div>
               <p className="text-[11px] text-zinc-400 mt-2 leading-relaxed">
-                Standard manual review. Submitted listings are verified by our team before going live—100% free.
+                Standard manual review. Submitted listings are verified by our
+                team before going live—100% free.
               </p>
             </div>
 
             {/* Paddle Instant Featured Tier Card ($19 USD) */}
             <div
-              onClick={() => setFormData({ ...formData, tier: 'paddle_featured' })}
+              onClick={() =>
+                setFormData({ ...formData, tier: "paddle_featured" })
+              }
               className={`cursor-pointer rounded-xl p-4 border transition-all relative overflow-hidden ${
-                formData.tier === 'paddle_featured'
-                  ? 'bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-amber-500/5 border-amber-500 ring-2 ring-amber-500/30'
-                  : 'bg-zinc-900/60 border-zinc-800 hover:border-amber-500/40'
+                formData.tier === "paddle_featured"
+                  ? "bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-amber-500/5 border-amber-500 ring-2 ring-amber-500/30"
+                  : "bg-zinc-900/60 border-zinc-800 hover:border-amber-500/40"
               }`}
             >
               <div className="absolute top-0 right-0 bg-gradient-to-l from-amber-500 to-orange-500 text-zinc-950 text-[9px] font-black px-2 py-0.5 rounded-bl">
@@ -189,12 +234,17 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                  <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">Paddle Featured</span>
+                  <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                    Paddle Featured
+                  </span>
                 </div>
-                <span className="text-sm font-black text-amber-400 mr-12">$19 USD</span>
+                <span className="text-sm font-black text-amber-400 mr-12">
+                  $19 USD
+                </span>
               </div>
               <p className="text-[11px] text-zinc-300 mt-2 leading-relaxed">
-                Instant approval, gold badge, top placement, and Paddle webhook upgrade simulation.
+                Instant approval, gold badge, top placement, and Paddle webhook
+                upgrade simulation.
               </p>
             </div>
           </div>
@@ -207,14 +257,18 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                   <ShoppingBag className="w-4 h-4" />
                 </div>
                 <div>
-                  <label htmlFor="toggle-marketplace" className="text-xs font-bold text-white cursor-pointer flex items-center gap-2">
+                  <label
+                    htmlFor="toggle-marketplace"
+                    className="text-xs font-bold text-white cursor-pointer flex items-center gap-2"
+                  >
                     List this startup for sale (Acquire/Microns mode)
                     <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
                       Marketplace
                     </span>
                   </label>
                   <p className="text-[11px] text-zinc-400 mt-0.5">
-                    Attract buyers, show MRR and net profit, and collect acquisition offers.
+                    Attract buyers, show MRR and net profit, and collect
+                    acquisition offers.
                   </p>
                 </div>
               </div>
@@ -225,14 +279,19 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 id="toggle-marketplace"
                 role="switch"
                 aria-checked={formData.is_for_sale}
-                onClick={() => setFormData({ ...formData, is_for_sale: !formData.is_for_sale })}
+                onClick={() =>
+                  setFormData({
+                    ...formData,
+                    is_for_sale: !formData.is_for_sale,
+                  })
+                }
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  formData.is_for_sale ? 'bg-amber-500' : 'bg-zinc-700'
+                  formData.is_for_sale ? "bg-amber-500" : "bg-zinc-700"
                 }`}
               >
                 <span
                   className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                    formData.is_for_sale ? 'translate-x-5' : 'translate-x-0'
+                    formData.is_for_sale ? "translate-x-5" : "translate-x-0"
                   }`}
                 />
               </button>
@@ -242,7 +301,10 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
             <p className="text-[11px] text-amber-300/90 mt-3 pt-2.5 border-t border-zinc-800/80 leading-relaxed flex items-center gap-1.5">
               <span>💡</span>
               <span>
-                <strong>Commission notice:</strong> Free to list for sale. StackDirectory collects a <strong>10% platform commission fee</strong> upon successful acquisition deal closure.
+                <strong>Commission notice:</strong> Free to list for sale.
+                StackDirectory collects a{" "}
+                <strong>10% platform commission fee</strong> upon successful
+                acquisition deal closure.
               </span>
             </p>
 
@@ -260,7 +322,12 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                         type="number"
                         min="0"
                         value={formData.asking_price}
-                        onChange={(e) => setFormData({ ...formData, asking_price: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            asking_price: e.target.value,
+                          })
+                        }
                         placeholder="25000"
                         required={formData.is_for_sale}
                         className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-950 text-white text-xs border border-amber-500/40 focus:border-amber-500 outline-none transition"
@@ -278,7 +345,12 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                         type="number"
                         min="0"
                         value={formData.monthly_revenue}
-                        onChange={(e) => setFormData({ ...formData, monthly_revenue: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            monthly_revenue: e.target.value,
+                          })
+                        }
                         placeholder="1450"
                         className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-950 text-white text-xs border border-zinc-700 focus:border-amber-500 outline-none transition"
                       />
@@ -295,7 +367,12 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                         type="number"
                         min="0"
                         value={formData.monthly_profit}
-                        onChange={(e) => setFormData({ ...formData, monthly_profit: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            monthly_profit: e.target.value,
+                          })
+                        }
                         placeholder="1100"
                         className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-950 text-white text-xs border border-zinc-700 focus:border-amber-500 outline-none transition"
                       />
@@ -313,7 +390,12 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                       <input
                         type="text"
                         value={formData.seller_contact}
-                        onChange={(e) => setFormData({ ...formData, seller_contact: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            seller_contact: e.target.value,
+                          })
+                        }
                         placeholder="founder@mystartup.com or @telegram_handle"
                         required={formData.is_for_sale}
                         className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-950 text-white text-xs border border-amber-500/40 focus:border-amber-500 outline-none transition"
@@ -330,7 +412,12 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                       <input
                         type="text"
                         value={formData.tech_stack}
-                        onChange={(e) => setFormData({ ...formData, tech_stack: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            tech_stack: e.target.value,
+                          })
+                        }
                         placeholder="Next.js 15, Supabase, Tailwind, Stripe, Python"
                         className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-950 text-white text-xs border border-zinc-700 focus:border-amber-500 outline-none transition"
                       />
@@ -350,7 +437,9 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
                 placeholder="e.g. SupaSearch AI"
                 required
                 className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition"
@@ -364,7 +453,9 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               <input
                 type="text"
                 value={formData.tagline}
-                onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, tagline: e.target.value })
+                }
                 placeholder="e.g. Ultra-fast semantic vector search for Postgres databases"
                 required
                 className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition"
@@ -379,7 +470,9 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 <input
                   type="text"
                   value={formData.website_url}
-                  onChange={(e) => setFormData({ ...formData, website_url: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, website_url: e.target.value })
+                  }
                   placeholder="https://yourapp.com"
                   required
                   className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition"
@@ -392,10 +485,14 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 </label>
                 <select
                   value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, category: e.target.value })
+                  }
                   className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition cursor-pointer"
                 >
-                  {CATEGORIES.filter((c) => c !== 'All' && c !== 'Startups For Sale').map((cat) => (
+                  {CATEGORIES.filter(
+                    (c) => c !== "All" && c !== "Startups For Sale",
+                  ).map((cat) => (
                     <option key={cat} value={cat}>
                       {cat}
                     </option>
@@ -411,7 +508,12 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 </label>
                 <select
                   value={formData.pricing_type}
-                  onChange={(e) => setFormData({ ...formData, pricing_type: e.target.value as PricingType })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      pricing_type: e.target.value as PricingType,
+                    })
+                  }
                   className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition cursor-pointer"
                 >
                   <option value="Free">Free</option>
@@ -421,7 +523,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 </select>
               </div>
 
-              {formData.tier === 'paddle_featured' && (
+              {formData.tier === "paddle_featured" && (
                 <div>
                   <label className="block text-xs font-medium text-amber-300 mb-1 flex items-center gap-1">
                     <Lock className="w-3 h-3" /> Billing Email (Paddle $19)
@@ -429,7 +531,12 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                   <input
                     type="email"
                     value={formData.customer_email}
-                    onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        customer_email: e.target.value,
+                      })
+                    }
                     placeholder="founder@startup.com"
                     className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-amber-500/40 focus:border-amber-500 outline-none transition"
                   />
@@ -444,7 +551,9 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               <textarea
                 rows={2}
                 value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
                 placeholder="Explain the product, user growth, architecture, and reason for selling (if applicable)..."
                 className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition resize-none"
               />
@@ -461,7 +570,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               Cancel
             </button>
 
-            {formData.tier === 'paddle_featured' ? (
+            {formData.tier === "paddle_featured" ? (
               <button
                 type="submit"
                 disabled={isProcessingCheckout || showCheckoutSuccess}
@@ -499,4 +608,3 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     </div>
   );
 };
-

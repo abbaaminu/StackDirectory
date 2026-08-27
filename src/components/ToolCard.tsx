@@ -1,12 +1,20 @@
-import React, { useState } from 'react';
-import { ExternalLink, ChevronUp, Sparkles, Zap, CheckCircle2, Cpu, ShoppingBag } from 'lucide-react';
-import { Tool } from '../types/directory';
+import React, { useState } from "react";
+import {
+  ExternalLink,
+  ChevronUp,
+  Sparkles,
+  Zap,
+  CheckCircle2,
+  Cpu,
+  ShoppingBag,
+} from "lucide-react";
+import { Tool } from "../types/directory";
 
 const getHostname = (url: string): string => {
   try {
-    return new URL(url).hostname.replace(/^www\./, '');
+    return new URL(url).hostname.replace(/^www\./, "");
   } catch {
-    return url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    return url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
   }
 };
 
@@ -29,7 +37,8 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   // Compact, dynamic favicon logo (graceful 2-letter avatar fallback)
   const domain = getHostname(tool.website_url);
   const logoSrc =
-    tool.icon_url || `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+    tool.icon_url ||
+    `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 
   const handleUpvote = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -38,42 +47,42 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     setTimeout(() => setIsUpvoteAnimating(false), 300);
   };
 
-                const getPricingBadgeColor = (type: string) => {
+  const getPricingBadgeColor = (type: string) => {
     switch (type) {
-            case 'Free':
-                            return 'bg-emerald-500/30 text-emerald-200 border border-emerald-400 px-3 py-1 rounded-full text-xs font-bold uppercase';
-            case 'Freemium':
-              return 'bg-cyan-500/30 text-cyan-200 border border-cyan-400 px-3 py-1 rounded-full text-xs font-bold uppercase';
-            case 'Open Source':
-              return 'bg-fuchsia-500/30 text-fuchsia-200 border border-fuchsia-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
-            case 'Paid':
-              return 'bg-purple-500/30 text-purple-200 border border-purple-400 px-3 py-1 rounded-full text-xs font-bold uppercase';
-            default:
-              return 'bg-slate-600 text-white border border-slate-400 px-3 py-1 rounded-full text-xs font-semibold';
+      case "Free":
+        return "bg-emerald-500/30 text-emerald-200 border border-emerald-400 px-3 py-1 rounded-full text-xs font-bold uppercase";
+      case "Freemium":
+        return "bg-cyan-500/30 text-cyan-200 border border-cyan-400 px-3 py-1 rounded-full text-xs font-bold uppercase";
+      case "Open Source":
+        return "bg-fuchsia-500/30 text-fuchsia-200 border border-fuchsia-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider";
+      case "Paid":
+        return "bg-purple-500/30 text-purple-200 border border-purple-400 px-3 py-1 rounded-full text-xs font-bold uppercase";
+      default:
+        return "bg-slate-600 text-white border border-slate-400 px-3 py-1 rounded-full text-xs font-semibold";
     }
   };
 
-    return (
+  return (
     <div
       id={`tool-card-${tool.id}`}
 
       className={`group relative bg-slate-900/90 border border-slate-800 hover:border-amber-400/80 shadow-xl rounded-xl p-4 flex flex-col justify-between transition-all duration-200 ${
         tool.is_for_sale || tool.is_featured
-          ? 'border-amber-400/70 hover:border-amber-400/80'
-          : ''
+          ? "border-amber-400/70 hover:border-amber-400/80"
+          : ""
       }`}
     >
       {/* Badges / Ribbons on Top */}
       <div className="absolute -top-3 left-5 flex items-center gap-2">
         {tool.is_for_sale && (
-          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-black bg-gradient-to-r from-amber-400 via-orange-400 to-amber-300 text-zinc-950 shadow-md shadow-amber-500/30 tracking-wider">
+          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-black bg-linear-to-r from-amber-400 via-orange-400 to-amber-300 text-zinc-950 shadow-md shadow-amber-500/30 tracking-wider">
             <ShoppingBag className="w-3 h-3 fill-zinc-950" />
             <span>FOR SALE</span>
           </div>
         )}
 
         {tool.is_featured && !tool.is_for_sale && (
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-gradient-to-r from-amber-400 to-orange-400 text-zinc-950 shadow-md shadow-amber-500/20">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-linear-to-r from-amber-400 to-orange-400 text-zinc-950 shadow-md shadow-amber-500/20">
             <Sparkles className="w-3 h-3 fill-zinc-950" />
             <span>FEATURED APP</span>
           </div>
@@ -86,7 +95,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           {/* App Identity */}
           <div className="flex items-center gap-3">
             {/* Compact Dynamic Logo: favicon with 2-letter avatar fallback */}
-            <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-400 flex items-center justify-center shadow-md shrink-0">
+            <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-linear-to-tr from-amber-500 via-orange-500 to-amber-400 flex items-center justify-center shadow-md shrink-0">
               {!logoFailed ? (
                 <img
                   src={logoSrc}
@@ -116,13 +125,19 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                   {tool.name}
                 </a>
                 {(tool.is_featured || tool.is_for_sale) && (
-                  <span title={tool.is_for_sale ? "Startup Acquisition Listing" : "Verified & Paddle Featured Upgrade"}>
+                  <span
+                    title={
+                      tool.is_for_sale
+                        ? "Startup Acquisition Listing"
+                        : "Verified & Paddle Featured Upgrade"
+                    }
+                  >
                     <CheckCircle2 className="w-4 h-4 text-amber-400 fill-amber-400/20" />
                   </span>
                 )}
               </div>
-                            <span className="text-slate-300 text-xs">
-                {new URL(tool.website_url).hostname.replace('www.', '')}
+              <span className="text-slate-300 text-xs">
+                {new URL(tool.website_url).hostname.replace("www.", "")}
               </span>
             </div>
           </div>
@@ -131,16 +146,20 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           <button
             id={`btn-upvote-${tool.id}`}
             onClick={handleUpvote}
-                                                className={`flex flex-col items-center justify-center min-w-[50px] px-3 py-2 rounded-xl border transition-all active:scale-95 ${
+            className={`flex flex-col items-center justify-center min-w-[50px] px-3 py-2 rounded-xl border transition-all active:scale-95 ${
               tool.user_has_upvoted
-                ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-sm shadow-amber-500/20'
-                : 'bg-slate-600/90 hover:bg-amber-500/20 border border-slate-400/70 hover:border-amber-400 text-slate-100 hover:text-amber-400'
-            } ${isUpvoteAnimating ? 'scale-110' : ''}`}
-            title={tool.user_has_upvoted ? 'Remove upvote' : 'Upvote this startup'}
+                ? "bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-sm shadow-amber-500/20"
+                : "bg-slate-600/90 hover:bg-amber-500/20 border border-slate-400/70 hover:border-amber-400 text-slate-100 hover:text-amber-400"
+            } ${isUpvoteAnimating ? "scale-110" : ""}`}
+            title={
+              tool.user_has_upvoted ? "Remove upvote" : "Upvote this startup"
+            }
           >
             <ChevronUp
               className={`w-4 h-4 transition ${
-                tool.user_has_upvoted ? 'text-amber-400 stroke-[3]' : 'text-zinc-400'
+                tool.user_has_upvoted
+                  ? "text-amber-400 stroke-[3]"
+                  : "text-zinc-400"
               }`}
             />
             <span className="text-xs font-bold font-mono leading-none mt-0.5">
@@ -149,12 +168,12 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           </button>
         </div>
 
-                {/* Tagline */}
+        {/* Tagline */}
         <p className="mt-2.5 text-sm font-semibold text-zinc-100 leading-snug line-clamp-1">
           {tool.tagline}
         </p>
 
-                {/* Description */}
+        {/* Description */}
         <p className="text-slate-200 text-sm leading-relaxed my-3 line-clamp-2">
           {tool.description}
         </p>
@@ -169,7 +188,10 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                   Asking Price
                 </span>
                 <span className="text-sm font-black text-white mt-0.5 block">
-                  ${tool.asking_price ? tool.asking_price.toLocaleString() : 'Negotiable'}
+                  $
+                  {tool.asking_price
+                    ? tool.asking_price.toLocaleString()
+                    : "Negotiable"}
                 </span>
               </div>
 
@@ -179,8 +201,13 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                   MRR
                 </span>
                 <span className="text-sm font-black text-white mt-0.5 block">
-                  ${tool.monthly_revenue !== undefined ? tool.monthly_revenue.toLocaleString() : '0'}
-                  <span className="text-[9px] font-normal text-zinc-400">/mo</span>
+                  $
+                  {tool.monthly_revenue !== undefined
+                    ? tool.monthly_revenue.toLocaleString()
+                    : "0"}
+                  <span className="text-[9px] font-normal text-zinc-400">
+                    /mo
+                  </span>
                 </span>
               </div>
 
@@ -190,8 +217,13 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                   Net Profit
                 </span>
                 <span className="text-sm font-black text-white mt-0.5 block">
-                  ${tool.monthly_profit !== undefined ? tool.monthly_profit.toLocaleString() : '0'}
-                  <span className="text-[9px] font-normal text-zinc-400">/mo</span>
+                  $
+                  {tool.monthly_profit !== undefined
+                    ? tool.monthly_profit.toLocaleString()
+                    : "0"}
+                  <span className="text-[9px] font-normal text-zinc-400">
+                    /mo
+                  </span>
                 </span>
               </div>
             </div>
@@ -219,7 +251,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
         )}
       </div>
 
-            {/* Footer Meta: Category, Pricing, & CTAs */}
+      {/* Footer Meta: Category, Pricing, & CTAs */}
       <div className="mt-3 pt-2.5 border-t border-slate-600/60 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           {/* Category Tag */}
@@ -230,7 +262,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           {/* Pricing Tag */}
           <span
             className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${getPricingBadgeColor(
-              tool.pricing_type
+              tool.pricing_type,
             )}`}
           >
             {tool.pricing_type}
@@ -239,17 +271,18 @@ export const ToolCard: React.FC<ToolCardProps> = ({
 
         {/* CTAs */}
         <div className="flex items-center gap-2">
-                    {tool.is_for_sale ? (
+          {tool.is_for_sale ? (
             <button
               id={`btn-acquire-${tool.id}`}
               onClick={() => onOpenAcquisition && onOpenAcquisition(tool)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-zinc-950 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-sm shadow-amber-500/30 active:scale-95 transition"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-zinc-950 bg-linear-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-sm shadow-amber-500/30 active:scale-95 transition"
             >
               <ShoppingBag className="w-3.5 h-3.5 fill-zinc-950" />
               <span>Make Offer</span>
             </button>
           ) : (
-            !tool.is_featured && onOpenUpgradeForTool && (
+            !tool.is_featured &&
+            onOpenUpgradeForTool && (
               <button
                 onClick={() => onOpenUpgradeForTool(tool)}
                 className="text-[11px] font-semibold text-amber-300 hover:text-amber-200 hover:underline flex items-center gap-1"
@@ -324,4 +357,3 @@ export const ToolCardSkeleton: React.FC = () => (
     </div>
   </div>
 );
-

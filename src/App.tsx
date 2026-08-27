@@ -1,23 +1,23 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Search, X, CheckCircle2, ShoppingBag, LayoutGrid } from 'lucide-react';
-import supabase from './lib/supabase';
-import type { Tool, PricingType } from './types/directory';
-import { Header } from './components/Header';
-import { ToolCard, ToolCardSkeleton } from './components/ToolCard';
-import { SubmitModal } from './components/SubmitModal';
-import { AcquisitionModal } from './components/AcquisitionModal';
-import { AuthModal } from './components/AuthModal';
+import { useState, useEffect, useCallback } from "react";
+import { Search, X, CheckCircle2, ShoppingBag, LayoutGrid } from "lucide-react";
+import supabase from "./lib/supabase";
+import type { Tool, PricingType } from "./types/directory";
+import { Header } from "./components/Header";
+import { ToolCard, ToolCardSkeleton } from "./components/ToolCard";
+import { SubmitModal } from "./components/SubmitModal";
+import { AcquisitionModal } from "./components/AcquisitionModal";
+import { AuthModal } from "./components/AuthModal";
 
-const PRICING_FILTERS: ReadonlyArray<'All' | PricingType> = [
-  'All',
-  'Free',
-  'Freemium',
-  'Paid',
+const PRICING_FILTERS: ReadonlyArray<"All" | PricingType> = [
+  "All",
+  "Free",
+  "Freemium",
+  "Paid",
 ];
 
-type ViewMode = 'all' | 'for_sale';
+type ViewMode = "all" | "for_sale";
 
-const VOTED_TOOLS_KEY = 'voted_tools';
+const VOTED_TOOLS_KEY = "voted_tools";
 
 const getVotedTools = (): string[] => {
   try {
@@ -42,21 +42,22 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   // Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [pricingFilter, setPricingFilter] = useState<'All' | PricingType>('All');
-  const [viewMode, setViewMode] = useState<ViewMode>('all');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [pricingFilter, setPricingFilter] = useState<"All" | PricingType>(
+    "All",
+  );
+  const [viewMode, setViewMode] = useState<ViewMode>("all");
 
   // Submit modal
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
 
   // Acquisition modal
-  const [selectedAcquisitionTool, setSelectedAcquisitionTool] = useState<Tool | null>(null);
+  const [selectedAcquisitionTool, setSelectedAcquisitionTool] =
+    useState<Tool | null>(null);
 
   // Auth modal (Log In / Sign Up)
-  const [authModal, setAuthModal] = useState<{
-    isOpen: boolean;
-    mode: 'login' | 'signup';
-  }>({ isOpen: false, mode: 'login' });
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
 
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -65,25 +66,27 @@ export default function App() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('tools')
-        .select('*')
-        .eq('is_approved', true)
-        .order('upvotes', { ascending: false });
+        .from("tools")
+        .select("*")
+        .eq("is_approved", true)
+        .order("upvotes", { ascending: false });
 
       if (error) {
-        console.error('Failed to load tools:', error.message);
+        console.error("Failed to load tools:", error.message);
         setError(error.message);
         return;
       }
 
-      setTools((data as Tool[]).map((tool) => ({
-        ...tool,
-        // Restore persistent upvote state across page reloads
-        user_has_upvoted: getVotedTools().includes(tool.id),
-      })) ?? []);
+      setTools(
+        (data as Tool[]).map((tool) => ({
+          ...tool,
+          // Restore persistent upvote state across page reloads
+          user_has_upvoted: getVotedTools().includes(tool.id),
+        })) ?? [],
+      );
     } catch (err) {
-      console.error('Unexpected error fetching tools:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch tools');
+      console.error("Unexpected error fetching tools:", err);
+      setError(err instanceof Error ? err.message : "Failed to fetch tools");
     } finally {
       setLoading(false);
     }
@@ -114,27 +117,29 @@ export default function App() {
       is_for_sale: newTool.is_for_sale ?? false,
       asking_price: newTool.asking_price ?? null,
       monthly_revenue: newTool.monthly_revenue ?? 0,
-            monthly_profit: newTool.monthly_profit ?? 0,
+      monthly_profit: newTool.monthly_profit ?? 0,
       seller_contact: newTool.seller_contact ?? null,
       tech_stack: newTool.tech_stack ?? [],
     };
 
     const { error } = await supabase
-      .from('tools')
+      .from("tools")
       .insert(row as unknown as never[]);
 
     if (error) {
-      console.error('Failed to submit tool:', error.message);
+      console.error("Failed to submit tool:", error.message);
       showToast(`❌ Failed to submit "${newTool.name}". Please try again.`);
       return;
     }
 
-    showToast(`📋 "${newTool.name}" submitted for review and will appear once approved.`);
+    showToast(
+      `📋 "${newTool.name}" submitted for review and will appear once approved.`,
+    );
     await fetchApprovedTools();
   };
 
   // Toggle upvote: increment/decrement upvotes in Supabase
-    const handleToggleUpvote = async (toolId: string) => {
+  const handleToggleUpvote = async (toolId: string) => {
     const tool = tools.find((t) => t.id === toolId);
     if (!tool) return;
 
@@ -143,13 +148,13 @@ export default function App() {
       : tool.upvotes + 1;
 
     const { error } = await supabase
-      .from('tools')
+      .from("tools")
       .update({ upvotes: nextUpvotes } as never)
-      .eq('id', toolId);
+      .eq("id", toolId);
 
-        if (error) {
-      console.error('Failed to update upvotes:', error.message);
-      showToast('❌ Could not update upvote.');
+    if (error) {
+      console.error("Failed to update upvotes:", error.message);
+      showToast("❌ Could not update upvote.");
       return;
     }
 
@@ -165,19 +170,23 @@ export default function App() {
     setTools((prev) =>
       prev.map((t) =>
         t.id === toolId
-          ? { ...t, upvotes: nextUpvotes, user_has_upvoted: !t.user_has_upvoted }
-          : t
-      )
+          ? {
+              ...t,
+              upvotes: nextUpvotes,
+              user_has_upvoted: !t.user_has_upvoted,
+            }
+          : t,
+      ),
     );
   };
 
-    // Filter approved tools by view mode, search query and pricing filter
+  // Filter approved tools by view mode, search query and pricing filter
   const displayedTools = tools.filter((tool) => {
-    if (viewMode === 'for_sale' && !tool.is_for_sale) {
+    if (viewMode === "for_sale" && !tool.is_for_sale) {
       return false;
     }
 
-    if (pricingFilter !== 'All' && tool.pricing_type !== pricingFilter) {
+    if (pricingFilter !== "All" && tool.pricing_type !== pricingFilter) {
       return false;
     }
 
@@ -187,8 +196,16 @@ export default function App() {
       const matchesTagline = tool.tagline.toLowerCase().includes(q);
       const matchesCategory = tool.category.toLowerCase().includes(q);
       const matchesDesc = tool.description.toLowerCase().includes(q);
-      const matchesTech = tool.tech_stack?.some((t) => t.toLowerCase().includes(q));
-      if (!matchesName && !matchesTagline && !matchesCategory && !matchesDesc && !matchesTech) {
+      const matchesTech = tool.tech_stack?.some((t) =>
+        t.toLowerCase().includes(q),
+      );
+      if (
+        !matchesName &&
+        !matchesTagline &&
+        !matchesCategory &&
+        !matchesDesc &&
+        !matchesTech
+      ) {
         return false;
       }
     }
@@ -197,7 +214,7 @@ export default function App() {
   });
 
   return (
-                <div className="bg-[#0a0e1a] min-h-screen text-slate-100 relative overflow-x-hidden">
+    <div className="bg-[#0a0e1a] min-h-screen text-slate-100 relative overflow-x-hidden">
       {/* Flippa-Style City / Architecture Hero Background */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[600px] overflow-hidden">
         <img
@@ -207,15 +224,18 @@ export default function App() {
           loading="eager"
         />
         {/* Dark gradient overlay so the bold hero title + tagline stand out clearly */}
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/90 to-[#0a0e1a]" />
+        <div className="absolute inset-0 bg-linear-to-b from-slate-950/80 via-slate-950/90 to-[#0a0e1a]" />
       </div>
 
       {/* Ambient Header Glow */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(100%_50%_at_50%_0%,rgba(245,158,11,0.12)_0%,transparent_100%)]" />
-            {/* Header with Submit App button */}
+      {/* Header with Submit App button */}
       <Header
         onOpenSubmit={() => setIsSubmitModalOpen(true)}
-        onOpenAuth={(mode) => setAuthModal({ isOpen: true, mode })}
+        onOpenAuth={(mode) => {
+          setAuthMode(mode);
+          setIsAuthOpen(true);
+        }}
       />
 
       {/* Toast Notification */}
@@ -234,37 +254,38 @@ export default function App() {
         </div>
       )}
 
-            <main className="relative z-10 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="relative z-10 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-3xl font-bold">StackDirectory</h1>
             <p className="text-sm text-slate-400 mt-1">
-              Discover, upvote, and submit the best developer tools &amp; startups.
+              Discover, upvote, and submit the best developer tools &amp;
+              startups.
             </p>
           </div>
 
           {/* View Mode Toggle */}
           <div className="inline-flex items-center rounded-xl border border-zinc-800 bg-zinc-900 p-1 gap-1">
             <button
-              onClick={() => setViewMode('all')}
+              onClick={() => setViewMode("all")}
               className={[
-                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition',
-                viewMode === 'all'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50'
-                  : 'text-slate-300 hover:text-white border border-transparent',
-              ].join(' ')}
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition",
+                viewMode === "all"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/50"
+                  : "text-slate-300 hover:text-white border border-transparent",
+              ].join(" ")}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
               All Apps
             </button>
             <button
-              onClick={() => setViewMode('for_sale')}
+              onClick={() => setViewMode("for_sale")}
               className={[
-                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition',
-                viewMode === 'for_sale'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50'
-                  : 'text-slate-300 hover:text-white border border-transparent',
-              ].join(' ')}
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition",
+                viewMode === "for_sale"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/50"
+                  : "text-slate-300 hover:text-white border border-transparent",
+              ].join(" ")}
             >
               <ShoppingBag className="w-3.5 h-3.5" />
               For Sale (Acquire Mode)
@@ -283,11 +304,11 @@ export default function App() {
                   key={filter}
                   onClick={() => setPricingFilter(filter)}
                   className={[
-                    'px-3 py-1.5 rounded-lg text-xs font-semibold border transition',
+                    "px-3 py-1.5 rounded-lg text-xs font-semibold border transition",
                     pricingFilter === filter
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
-                      : 'bg-zinc-900 text-slate-300 border-zinc-700 hover:border-zinc-600',
-                  ].join(' ')}
+                      ? "bg-amber-500/20 text-amber-300 border-amber-500/50"
+                      : "bg-zinc-900 text-slate-300 border-zinc-700 hover:border-zinc-600",
+                  ].join(" ")}
                 >
                   {filter}
                 </button>
@@ -308,7 +329,7 @@ export default function App() {
           />
           {searchQuery && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => setSearchQuery("")}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
             >
               <X className="w-4 h-4" />
@@ -332,7 +353,7 @@ export default function App() {
             <p>{error}</p>
           </div>
         ) : displayedTools.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto px-4 py-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto px-4 py-8">
             {displayedTools.map((tool) => (
               <ToolCard
                 key={tool.id}
@@ -343,17 +364,17 @@ export default function App() {
             ))}
           </div>
         ) : (
-                    <div className="text-center py-20 bg-zinc-900/30 rounded-2xl border border-zinc-800">
+          <div className="text-center py-20 bg-zinc-900/30 rounded-2xl border border-zinc-800">
             <p className="text-slate-400">
               {tools.length === 0
-                ? 'No approved tools submitted yet.'
-                : 'No tools match your current filters.'}
+                ? "No approved tools submitted yet."
+                : "No tools match your current filters."}
             </p>
             <button
               onClick={() => {
-                setSearchQuery('');
-                setPricingFilter('All');
-                setViewMode('all');
+                setSearchQuery("");
+                setPricingFilter("All");
+                setViewMode("all");
               }}
               className="mt-4 px-4 py-2 rounded-lg text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-zinc-950 transition"
             >
@@ -363,7 +384,7 @@ export default function App() {
         )}
       </main>
 
-            {/* Submit Tool Modal */}
+      {/* Submit Tool Modal */}
       <SubmitModal
         isOpen={isSubmitModalOpen}
         onClose={() => setIsSubmitModalOpen(false)}
@@ -379,10 +400,10 @@ export default function App() {
 
       {/* Auth Modal (Log In / Sign Up) */}
       <AuthModal
-        isOpen={authModal.isOpen}
-        mode={authModal.mode}
-        onClose={() => setAuthModal((prev) => ({ ...prev, isOpen: false }))}
-        onSwitchMode={(mode) => setAuthModal((prev) => ({ ...prev, mode }))}
+        isOpen={isAuthOpen}
+        mode={authMode}
+        onClose={() => setIsAuthOpen(false)}
+        onSwitchMode={setAuthMode}
       />
     </div>
   );

@@ -1,9 +1,9 @@
-﻿import React from 'react';
-import { LogIn, Plus, UserPlus } from 'lucide-react';
+﻿import React from "react";
+import { LogIn, Plus, UserPlus } from "lucide-react";
 
 interface HeaderProps {
   onOpenSubmit: () => void;
-  onOpenAuth?: (mode: 'login' | 'signup') => void;
+  onOpenAuth?: (mode: "login" | "signup") => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenSubmit, onOpenAuth }) => {
@@ -12,12 +12,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSubmit, onOpenAuth }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand / Logo */}
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-300 flex items-center justify-center shadow-lg shadow-amber-500/20 text-zinc-950 font-black text-lg">
+          <div className="h-9 w-9 rounded-xl bg-linear-to-tr from-amber-500 via-orange-500 to-amber-300 flex items-center justify-center shadow-lg shadow-amber-500/20 text-zinc-950 font-black text-lg">
             ▲
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-lg font-bold tracking-tight text-white">StackDirectory</span>
+              <span className="text-lg font-bold tracking-tight text-white">
+                StackDirectory
+              </span>
             </div>
           </div>
         </div>
@@ -28,7 +30,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSubmit, onOpenAuth }) => {
           {onOpenAuth && (
             <button
               id="btn-login-header"
-              onClick={() => onOpenAuth('login')}
+              onClick={() => onOpenAuth("login")}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-200 border border-slate-600 hover:border-amber-400/70 hover:text-amber-300 transition active:scale-95"
             >
               <LogIn className="w-3.5 h-3.5" />
@@ -40,8 +42,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSubmit, onOpenAuth }) => {
           {onOpenAuth && (
             <button
               id="btn-signup-header"
-              onClick={() => onOpenAuth('signup')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-zinc-950 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-md shadow-amber-500/20 active:scale-95 transition"
+              onClick={() => onOpenAuth("signup")}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-zinc-950 bg-linear-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-md shadow-amber-500/20 active:scale-95 transition"
             >
               <UserPlus className="w-3.5 h-3.5" />
               <span>Sign Up</span>
@@ -52,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSubmit, onOpenAuth }) => {
           <button
             id="btn-submit-app-header"
             onClick={onOpenSubmit}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-950 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-md shadow-amber-500/20 active:scale-95 transition"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-950 bg-linear-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-md shadow-amber-500/20 active:scale-95 transition"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Submit App</span>

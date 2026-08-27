@@ -1,6 +1,14 @@
-import React from 'react';
-import { X, ShieldCheck, Check, Trash2, Zap, ExternalLink, Clock } from 'lucide-react';
-import { Tool } from '../types/directory';
+import React from "react";
+import {
+  X,
+  ShieldCheck,
+  Check,
+  Trash2,
+  Zap,
+  ExternalLink,
+  Clock,
+} from "lucide-react";
+import { Tool } from "../types/directory";
 
 interface AdminQueueModalProps {
   isOpen: boolean;
@@ -45,7 +53,9 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
               Supabase Review Queue & Mod Panel
             </h2>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Review free user submissions (<code className="text-zinc-300">is_approved = false</code>) and manage directory listings.
+              Review free user submissions (
+              <code className="text-zinc-300">is_approved = false</code>) and
+              manage directory listings.
             </p>
           </div>
         </div>
@@ -55,7 +65,9 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
           <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-amber-400" />
-              <h3 className="text-sm font-bold text-white">Pending Review Queue</h3>
+              <h3 className="text-sm font-bold text-white">
+                Pending Review Queue
+              </h3>
             </div>
             <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
               {pendingTools.length} Pending
@@ -64,7 +76,8 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
 
           {pendingTools.length === 0 ? (
             <div className="py-8 text-center text-xs text-zinc-500 bg-zinc-900/30 rounded-xl border border-zinc-800/60 mt-3">
-              No pending apps in the queue. All submissions are approved or upgraded!
+              No pending apps in the queue. All submissions are approved or
+              upgraded!
             </div>
           ) : (
             <div className="mt-3 space-y-3">
@@ -75,7 +88,9 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-white">{tool.name}</span>
+                      <span className="text-sm font-bold text-white">
+                        {tool.name}
+                      </span>
                       <span className="text-[11px] px-2 py-0.2 rounded bg-zinc-800 text-zinc-400">
                         {tool.category}
                       </span>
@@ -84,7 +99,9 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                       </span>
                       {tool.is_for_sale && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                          For Sale (${tool.asking_price?.toLocaleString() || 'N/A'}) • MRR ${tool.monthly_revenue || 0}/mo
+                          For Sale ($
+                          {tool.asking_price?.toLocaleString() || "N/A"}) • MRR
+                          ${tool.monthly_revenue || 0}/mo
                         </span>
                       )}
                     </div>
@@ -136,18 +153,28 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
         {/* Directory Summary Stats */}
         <div className="mt-6 pt-4 border-t border-zinc-800 grid grid-cols-3 gap-3 text-center">
           <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800">
-            <div className="text-xl font-bold text-white">{approvedTools.length}</div>
-            <div className="text-[11px] text-zinc-400 mt-0.5">Approved Tools</div>
+            <div className="text-xl font-bold text-white">
+              {approvedTools.length}
+            </div>
+            <div className="text-[11px] text-zinc-400 mt-0.5">
+              Approved Tools
+            </div>
           </div>
           <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800">
             <div className="text-xl font-bold text-amber-400">
               {approvedTools.filter((t) => t.is_featured).length}
             </div>
-            <div className="text-[11px] text-zinc-400 mt-0.5">Paddle Featured</div>
+            <div className="text-[11px] text-zinc-400 mt-0.5">
+              Paddle Featured
+            </div>
           </div>
           <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800">
-            <div className="text-xl font-bold text-zinc-300">{pendingTools.length}</div>
-            <div className="text-[11px] text-zinc-400 mt-0.5">Pending Queue</div>
+            <div className="text-xl font-bold text-zinc-300">
+              {pendingTools.length}
+            </div>
+            <div className="text-[11px] text-zinc-400 mt-0.5">
+              Pending Queue
+            </div>
           </div>
         </div>
       </div>
