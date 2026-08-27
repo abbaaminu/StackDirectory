@@ -52,7 +52,9 @@ export const Hero: React.FC<HeroProps> = ({
           loading="eager"
         />
         {/* Dark gradient overlay so the bold hero title + tagline stand out clearly */}
-        <div className="absolute inset-0 bg-linear-to-b from-slate-950/80 via-slate-950/90 to-[#0a0e1a]" />
+        <div className="absolute inset-0 bg-linear-to-b from-slate-950/80 via-slate-950/90 to-[#0B0F17]" />
+        {/* Modern fintech slate overlay for palette cohesion */}
+        <div className="absolute inset-0 bg-linear-to-b from-transparent via-[#0B0F17]/70 to-[#0B0F17]" />
       </div>
       {/* Monetization / Tech Stack Banner */}
       <div className="relative z-10 flex flex-wrap items-center justify-center gap-2 mb-6">

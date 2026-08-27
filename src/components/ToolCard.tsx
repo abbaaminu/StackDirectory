@@ -50,15 +50,15 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   const getPricingBadgeColor = (type: string) => {
     switch (type) {
       case "Free":
-        return "bg-emerald-500/30 text-emerald-200 border border-emerald-400 px-3 py-1 rounded-full text-xs font-bold uppercase";
+        return "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-xs font-semibold";
       case "Freemium":
-        return "bg-cyan-500/30 text-cyan-200 border border-cyan-400 px-3 py-1 rounded-full text-xs font-bold uppercase";
+        return "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 px-2.5 py-0.5 rounded-full text-xs font-semibold";
       case "Open Source":
-        return "bg-fuchsia-500/30 text-fuchsia-200 border border-fuchsia-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider";
+        return "bg-fuchsia-500/15 text-fuchsia-400 border border-fuchsia-500/30 px-2.5 py-0.5 rounded-full text-xs font-semibold";
       case "Paid":
-        return "bg-purple-500/30 text-purple-200 border border-purple-400 px-3 py-1 rounded-full text-xs font-bold uppercase";
+        return "bg-amber-500/15 text-amber-400 border border-amber-500/30 px-2.5 py-0.5 rounded-full text-xs font-semibold";
       default:
-        return "bg-slate-600 text-white border border-slate-400 px-3 py-1 rounded-full text-xs font-semibold";
+        return "bg-slate-600 text-white border border-slate-400 px-2.5 py-0.5 rounded-full text-xs font-semibold";
     }
   };
 
@@ -66,7 +66,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     <div
       id={`tool-card-${tool.id}`}
 
-      className={`group relative bg-slate-900/90 border border-slate-800 hover:border-amber-400/80 shadow-xl rounded-xl p-4 flex flex-col justify-between transition-all duration-200 ${
+      className={`group relative bg-[#131B2E] border border-slate-800 hover:border-emerald-500/60 shadow-lg hover:shadow-[0_0_20px_rgba(16,185,129,0.12)] rounded-xl p-5 flex flex-col justify-between transition-all duration-300 ${
         tool.is_for_sale || tool.is_featured
           ? "border-amber-400/70 hover:border-amber-400/80"
           : ""
@@ -119,7 +119,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="text-white font-bold text-lg hover:text-amber-300"
+                  className="text-white font-bold text-lg hover:text-emerald-400"
                   title={`Visit ${tool.website_url}`}
                 >
                   {tool.name}

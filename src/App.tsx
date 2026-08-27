@@ -214,7 +214,7 @@ export default function App() {
   });
 
   return (
-    <div className="bg-[#0a0e1a] min-h-screen text-slate-100 relative overflow-x-hidden">
+    <div className="bg-[#0B0F17] min-h-screen text-slate-100 relative overflow-x-hidden">
       {/* Flippa-Style City / Architecture Hero Background */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[600px] overflow-hidden">
         <img
@@ -224,7 +224,7 @@ export default function App() {
           loading="eager"
         />
         {/* Dark gradient overlay so the bold hero title + tagline stand out clearly */}
-        <div className="absolute inset-0 bg-linear-to-b from-slate-950/80 via-slate-950/90 to-[#0a0e1a]" />
+        <div className="absolute inset-0 bg-linear-to-b from-slate-950/80 via-slate-950/90 to-[#0B0F17]" />
       </div>
 
       {/* Ambient Header Glow */}
@@ -401,9 +401,8 @@ export default function App() {
       {/* Auth Modal (Log In / Sign Up) */}
       <AuthModal
         isOpen={isAuthOpen}
-        mode={authMode}
+        initialMode={authMode}
         onClose={() => setIsAuthOpen(false)}
-        onSwitchMode={setAuthMode}
       />
     </div>
   );

@@ -15,9 +15,8 @@ export type AuthMode = "login" | "signup";
 
 interface AuthModalProps {
   isOpen: boolean;
-  mode: AuthMode;
+  initialMode: AuthMode;
   onClose: () => void;
-  onSwitchMode: (mode: AuthMode) => void;
 }
 
 const CITY_BG =
@@ -25,17 +24,22 @@ const CITY_BG =
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
-  mode,
+  initialMode,
   onClose,
-  onSwitchMode,
 }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<AuthMode>(initialMode);
 
   const isLogin = mode === "login";
+
+  // Sync the internal tab whenever the requesting entry point (initialMode) changes
+  useEffect(() => {
+    if (isOpen) setMode(initialMode);
+  }, [initialMode, isOpen]);
 
   // Lock body scroll & close on Escape while the modal is open
   useEffect(() => {
@@ -146,7 +150,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-700 bg-slate-950/50">
           <button
             type="button"
-            onClick={() => onSwitchMode("login")}
+
+            onClick={() => setMode("login")}
             className={tabClasses(isLogin)}
           >
             <span className="inline-flex items-center justify-center gap-1.5 w-full">
@@ -156,7 +161,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => onSwitchMode("signup")}
+            onClick={() => setMode("signup")}
             className={tabClasses(!isLogin)}
           >
             <span className="inline-flex items-center justify-center gap-1.5 w-full">
@@ -254,7 +259,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {isLogin ? "Don't have an account? " : "Already have an account? "}
             <button
               type="button"
-              onClick={() => onSwitchMode(isLogin ? "signup" : "login")}
+              onClick={() => setMode(isLogin ? "signup" : "login")}
               className="inline-flex items-center gap-0.5 font-semibold text-amber-400 hover:text-amber-300 transition"
             >
               {isLogin ? "Create Account" : "Log In"}
