@@ -1,19 +1,20 @@
 import { useState, useEffect } from 'react';
 import supabase from '../lib/supabase';
 import type { Tool } from '../types/directory';
+import { ToolCardSkeleton } from '../components/ToolCard';
 
 const getPricingBadgeColor = (type: string) => {
   switch (type) {
         case 'Free':
-          return 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/60 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
+          return 'bg-emerald-500/30 text-emerald-200 border border-emerald-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
         case 'Freemium':
-          return 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/60 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
+          return 'bg-cyan-500/30 text-cyan-200 border border-cyan-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
         case 'Open Source':
-          return 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-400/60 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
+          return 'bg-fuchsia-500/30 text-fuchsia-200 border border-fuchsia-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
         case 'Paid':
-          return 'bg-purple-500/20 text-purple-300 border border-purple-400/60 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
+          return 'bg-purple-500/30 text-purple-200 border border-purple-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
         default:
-          return 'bg-slate-700/90 text-slate-100 border border-slate-600 px-3 py-1 rounded-full text-xs font-medium';
+          return 'bg-slate-600 text-white border border-slate-400 px-3 py-1 rounded-full text-xs font-semibold';
   }
 };
 
@@ -60,7 +61,15 @@ export default function HomePage() {
         <h1 className="text-3xl font-bold mb-6">StackDirectory</h1>
 
         {loading ? (
-          <p className="text-slate-400">Loading approved tools…</p>
+          <div
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto"
+            aria-busy="true"
+            aria-label="Loading tools"
+          >
+            {Array.from({ length: 6 }).map((_, index) => (
+              <ToolCardSkeleton key={index} />
+            ))}
+          </div>
         ) : error ? (
           <div className="border border-red-500/50 bg-red-500/10 rounded-lg p-4 text-red-200 text-sm">
             <p className="font-semibold mb-1">Failed to load tools</p>
@@ -71,16 +80,16 @@ export default function HomePage() {
             {tools.map((tool) => (
               <div
                 key={tool.id}
-                className="bg-slate-800/90 border-2 border-slate-700/80 hover:border-amber-400/90 shadow-xl hover:shadow-[0_0_25px_rgba(245,158,11,0.2)] transition-all duration-300 rounded-2xl p-5 flex flex-col justify-between"
+                className="bg-slate-700/95 border-2 border-slate-500/70 hover:border-amber-400 shadow-xl hover:shadow-[0_0_25px_rgba(245,158,11,0.2)] transition-all duration-300 rounded-2xl p-5 flex flex-col justify-between"
               >
                 <div>
-                  <h2 className="text-white font-bold text-lg hover:text-amber-400 transition-colors">
+                  <h2 className="text-white font-bold text-lg hover:text-amber-300 transition-colors">
                     {tool.name}
                   </h2>
-                  <p className="text-slate-400 text-sm mt-1">{tool.tagline}</p>
+                  <p className="text-slate-300 text-sm mt-1">{tool.tagline}</p>
 
                   <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="bg-slate-700/90 text-slate-100 border border-slate-600 px-3 py-1 rounded-full text-xs font-medium">
+                    <span className="bg-slate-600 text-white border border-slate-400/70 px-3 py-1 rounded-full text-xs font-semibold">
                       {tool.category}
                     </span>
                     <span className={`${getPricingBadgeColor(tool.pricing_type)}`}>
@@ -89,7 +98,7 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                <div className="mt-4 flex justify-between items-center text-xs text-slate-400">
+                <div className="mt-4 pt-3 border-t border-slate-600/60 flex justify-between items-center text-xs text-slate-300">
                   <span>
                     Upvotes: <span className="font-semibold text-white">{tool.upvotes}</span>
                   </span>
@@ -98,7 +107,7 @@ export default function HomePage() {
             ))}
           </div>
         ) : (
-          <p className="text-slate-400">No approved tools submitted yet.</p>
+          <p className="text-slate-300">No approved tools submitted yet.</p>
         )}
       </div>
     </main>

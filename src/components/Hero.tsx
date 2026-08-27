@@ -36,13 +36,13 @@ export const Hero: React.FC<HeroProps> = ({
     <section className="pt-8 pb-10">
       {/* Monetization / Tech Stack Banner */}
       <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-zinc-900/90 text-zinc-300 border border-zinc-800 shadow-inner">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-slate-700/95 text-slate-100 border border-slate-500/70 shadow-inner">
           <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
           <span>Next.js 15 App Router • Supabase DB • Paddle Billing</span>
-          <span className="text-zinc-600">•</span>
-          <span className="text-amber-400 font-semibold">{totalApproved} Live Apps</span>
-          <span className="text-zinc-600">•</span>
-          <span className="text-orange-400 font-semibold">{forSaleCount} Startups For Sale</span>
+          <span className="text-slate-400">•</span>
+          <span className="text-amber-300 font-semibold">{totalApproved} Live Apps</span>
+          <span className="text-slate-400">•</span>
+          <span className="text-orange-300 font-semibold">{forSaleCount} Startups For Sale</span>
         </div>
       </div>
 
@@ -54,21 +54,21 @@ export const Hero: React.FC<HeroProps> = ({
             Acquisition Marketplace
           </span>
         </h1>
-        <p className="text-base sm:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
+        <p className="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
           The hub for next-gen developer utilities, AI apps, and vetted micro-SaaS businesses for sale. List for 100% free ($0), boost instantly with Paddle ($19 USD), or buy profitable software with 10% commission.
         </p>
 
         {/* Value Prop Badges */}
-        <div className="pt-2 flex flex-wrap items-center justify-center gap-3 text-xs text-zinc-400">
-          <div className="flex items-center gap-1.5 bg-zinc-900/60 px-3 py-1.5 rounded-lg border border-zinc-800/80">
+        <div className="pt-2 flex flex-wrap items-center justify-center gap-3 text-xs text-slate-300">
+          <div className="flex items-center gap-1.5 bg-slate-700/95 px-3 py-1.5 rounded-lg border border-slate-500/70">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
             <span><strong>100% Free</strong> ($0) Review Queue</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/30 text-amber-300">
+          <div className="flex items-center gap-1.5 bg-amber-500/20 px-3 py-1.5 rounded-lg border border-amber-400/60 text-amber-200">
             <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
             <span><strong>$19 Flat</strong> Paddle Instant Featured</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-orange-500/10 px-3 py-1.5 rounded-lg border border-orange-500/30 text-orange-300">
+          <div className="flex items-center gap-1.5 bg-orange-500/20 px-3 py-1.5 rounded-lg border border-orange-400/60 text-orange-200">
             <ShoppingBag className="w-3.5 h-3.5 text-orange-400" />
             <span><strong>Acquire Startups:</strong> Free to list • 10% deal commission</span>
           </div>
@@ -79,19 +79,19 @@ export const Hero: React.FC<HeroProps> = ({
       <div className="mt-10 max-w-4xl mx-auto space-y-4">
         {/* Search Input Box */}
         <div className="relative flex items-center">
-          <Search className="absolute left-4 w-5 h-5 text-zinc-400 pointer-events-none" />
+          <Search className="absolute left-4 w-5 h-5 text-slate-300 pointer-events-none" />
           <input
             id="input-search-tools"
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search startups for sale, MRR, tech stacks, or desktop utilities..."
-            className="w-full pl-12 pr-12 py-3.5 rounded-xl bg-zinc-900/90 text-white placeholder-zinc-500 border border-zinc-800 focus:border-amber-500/80 focus:ring-2 focus:ring-amber-500/20 text-sm md:text-base outline-none transition shadow-lg"
+            className="w-full pl-12 pr-12 py-3.5 rounded-xl bg-slate-700/95 text-white placeholder-slate-400 border border-slate-500/70 focus:border-amber-400 focus:ring-2 focus:ring-amber-500/30 text-sm md:text-base outline-none transition shadow-lg"
           />
           {searchQuery && (
             <button
               onClick={() => onSearchChange('')}
-              className="absolute right-4 text-zinc-400 hover:text-white p-1"
+              className="absolute right-4 text-slate-300 hover:text-white p-1"
             >
               <X className="w-4 h-4" />
             </button>
@@ -117,14 +117,14 @@ export const Hero: React.FC<HeroProps> = ({
                         ? 'bg-gradient-to-r from-amber-400 via-orange-400 to-amber-300 text-zinc-950 font-black shadow-md shadow-amber-500/30 ring-1 ring-amber-300'
                         : 'bg-amber-500 text-zinc-950 font-bold shadow-sm shadow-amber-500/20'
                       : isMarketplace
-                      ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 font-semibold'
-                      : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800/80'
+                      ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/60 font-semibold'
+                      : 'bg-slate-600/80 hover:bg-slate-500 text-slate-200 hover:text-white border border-slate-400/60'
                   }`}
                 >
                   {isMarketplace && <span>🏷️</span>}
                   <span>{cat}</span>
                   {isMarketplace && (
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${isActive ? 'bg-zinc-950 text-amber-300' : 'bg-amber-500/30 text-amber-200'}`}>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${isActive ? 'bg-zinc-950 text-amber-300' : 'bg-amber-500/40 text-amber-100'}`}>
                       {forSaleCount}
                     </span>
                   )}
@@ -141,7 +141,7 @@ export const Hero: React.FC<HeroProps> = ({
                 id="select-pricing-filter"
                 value={selectedPricing}
                 onChange={(e) => onPricingChange(e.target.value)}
-                className="bg-zinc-900 text-xs text-zinc-300 font-medium px-3 py-1.5 rounded-lg border border-zinc-800 hover:border-zinc-700 outline-none cursor-pointer focus:ring-1 focus:ring-amber-500"
+                className="bg-slate-600 text-xs text-slate-100 font-medium px-3 py-1.5 rounded-lg border border-slate-400/60 hover:border-slate-300 outline-none cursor-pointer focus:ring-1 focus:ring-amber-500"
               >
                 <option value="All">All Pricing</option>
                 <option value="Free">Free</option>
@@ -157,7 +157,7 @@ export const Hero: React.FC<HeroProps> = ({
                 id="select-sort-filter"
                 value={sortBy}
                 onChange={(e) => onSortChange(e.target.value as any)}
-                className="bg-zinc-900 text-xs text-zinc-300 font-medium px-3 py-1.5 rounded-lg border border-zinc-800 hover:border-zinc-700 outline-none cursor-pointer focus:ring-1 focus:ring-amber-500"
+                className="bg-slate-600 text-xs text-slate-100 font-medium px-3 py-1.5 rounded-lg border border-slate-400/60 hover:border-slate-300 outline-none cursor-pointer focus:ring-1 focus:ring-amber-500"
               >
                 <option value="featured">Featured First</option>
                 <option value="for_sale">🏷️ For Sale First</option>
