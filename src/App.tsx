@@ -6,6 +6,7 @@ import { Header } from './components/Header';
 import { ToolCard, ToolCardSkeleton } from './components/ToolCard';
 import { SubmitModal } from './components/SubmitModal';
 import { AcquisitionModal } from './components/AcquisitionModal';
+import { AuthModal } from './components/AuthModal';
 
 const PRICING_FILTERS: ReadonlyArray<'All' | PricingType> = [
   'All',
@@ -50,6 +51,12 @@ export default function App() {
 
   // Acquisition modal
   const [selectedAcquisitionTool, setSelectedAcquisitionTool] = useState<Tool | null>(null);
+
+  // Auth modal (Log In / Sign Up)
+  const [authModal, setAuthModal] = useState<{
+    isOpen: boolean;
+    mode: 'login' | 'signup';
+  }>({ isOpen: false, mode: 'login' });
 
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -191,11 +198,24 @@ export default function App() {
 
   return (
                 <div className="bg-[#0a0e1a] min-h-screen text-slate-100 relative overflow-x-hidden">
+      {/* Flippa-Style City / Architecture Hero Background */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[600px] overflow-hidden">
+        <img
+          src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=2000&q=80"
+          alt=""
+          className="w-full h-full object-cover object-center"
+          loading="eager"
+        />
+        {/* Dark gradient overlay so the bold hero title + tagline stand out clearly */}
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/90 to-[#0a0e1a]" />
+      </div>
+
       {/* Ambient Header Glow */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(100%_50%_at_50%_0%,rgba(245,158,11,0.12)_0%,transparent_100%)]" />
             {/* Header with Submit App button */}
       <Header
         onOpenSubmit={() => setIsSubmitModalOpen(true)}
+        onOpenAuth={(mode) => setAuthModal({ isOpen: true, mode })}
       />
 
       {/* Toast Notification */}
@@ -214,7 +234,7 @@ export default function App() {
         </div>
       )}
 
-            <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <main className="relative z-10 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-3xl font-bold">StackDirectory</h1>
@@ -355,6 +375,14 @@ export default function App() {
         isOpen={!!selectedAcquisitionTool}
         onClose={() => setSelectedAcquisitionTool(null)}
         tool={selectedAcquisitionTool}
+      />
+
+      {/* Auth Modal (Log In / Sign Up) */}
+      <AuthModal
+        isOpen={authModal.isOpen}
+        mode={authModal.mode}
+        onClose={() => setAuthModal((prev) => ({ ...prev, isOpen: false }))}
+        onSwitchMode={(mode) => setAuthModal((prev) => ({ ...prev, mode }))}
       />
     </div>
   );

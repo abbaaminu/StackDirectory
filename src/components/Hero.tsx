@@ -33,9 +33,20 @@ export const Hero: React.FC<HeroProps> = ({
   onOpenSubmit,
 }) => {
   return (
-    <section className="pt-8 pb-10">
+    <section className="relative pt-8 pb-10 overflow-hidden">
+      {/* Flippa-Style City / Architecture Hero Background */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        <img
+          src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=2000&q=80"
+          alt=""
+          className="w-full h-full object-cover object-center"
+          loading="eager"
+        />
+        {/* Dark gradient overlay so the bold hero title + tagline stand out clearly */}
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/90 to-[#0a0e1a]" />
+      </div>
       {/* Monetization / Tech Stack Banner */}
-      <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+      <div className="relative z-10 flex flex-wrap items-center justify-center gap-2 mb-6">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-slate-700/95 text-slate-100 border border-slate-500/70 shadow-inner">
           <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
           <span>Next.js 15 App Router • Supabase DB • Paddle Billing</span>
@@ -47,7 +58,7 @@ export const Hero: React.FC<HeroProps> = ({
       </div>
 
       {/* Main Headline */}
-      <div className="text-center max-w-3xl mx-auto space-y-4">
+      <div className="relative z-10 text-center max-w-3xl mx-auto space-y-4">
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-tight">
           Startup Discovery & <br className="hidden sm:inline" />
           <span className="bg-gradient-to-r from-amber-300 via-orange-400 to-amber-500 bg-clip-text text-transparent">
@@ -76,7 +87,7 @@ export const Hero: React.FC<HeroProps> = ({
       </div>
 
       {/* Instant Search and Filters Bar */}
-      <div className="mt-10 max-w-4xl mx-auto space-y-4">
+      <div className="relative z-10 mt-10 max-w-4xl mx-auto space-y-4">
         {/* Search Input Box */}
         <div className="relative flex items-center">
           <Search className="absolute left-4 w-5 h-5 text-slate-300 pointer-events-none" />

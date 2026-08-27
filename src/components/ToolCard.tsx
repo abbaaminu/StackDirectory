@@ -2,6 +2,14 @@ import React, { useState } from 'react';
 import { ExternalLink, ChevronUp, Sparkles, Zap, CheckCircle2, Cpu, ShoppingBag } from 'lucide-react';
 import { Tool } from '../types/directory';
 
+const getHostname = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  }
+};
+
 interface ToolCardProps {
   tool: Tool;
   onToggleUpvote: (toolId: string) => void;
@@ -16,6 +24,12 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   onOpenAcquisition,
 }) => {
   const [isUpvoteAnimating, setIsUpvoteAnimating] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
+
+  // Compact, dynamic favicon logo (graceful 2-letter avatar fallback)
+  const domain = getHostname(tool.website_url);
+  const logoSrc =
+    tool.icon_url || `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 
   const handleUpvote = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -43,9 +57,9 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     <div
       id={`tool-card-${tool.id}`}
 
-      className={`group relative bg-slate-700/95 border-2 border-slate-500/70 hover:border-amber-400 shadow-xl rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 ${
+      className={`group relative bg-slate-900/90 border border-slate-800 hover:border-amber-400/80 shadow-xl rounded-xl p-4 flex flex-col justify-between transition-all duration-200 ${
         tool.is_for_sale || tool.is_featured
-          ? 'border-amber-400/80 hover:border-amber-300'
+          ? 'border-amber-400/70 hover:border-amber-400/80'
           : ''
       }`}
     >
@@ -71,11 +85,22 @@ export const ToolCard: React.FC<ToolCardProps> = ({
         <div className="flex items-start justify-between gap-3">
           {/* App Identity */}
           <div className="flex items-center gap-3">
-                                                {/* App Monogram / Icon */}
-            <div
-              className={`bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-400 text-slate-950 font-black shadow-md rounded-xl w-12 h-12 flex items-center justify-center text-base`}
-            >
-              {tool.name.slice(0, 2).toUpperCase()}
+            {/* Compact Dynamic Logo: favicon with 2-letter avatar fallback */}
+            <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-400 flex items-center justify-center shadow-md shrink-0">
+              {!logoFailed ? (
+                <img
+                  src={logoSrc}
+                  alt={`${tool.name} logo`}
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  onError={() => setLogoFailed(true)}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-slate-950 font-black text-xs tracking-wide">
+                  {tool.name.slice(0, 2).toUpperCase()}
+                </span>
+              )}
             </div>
 
             <div>
@@ -259,14 +284,14 @@ export const ToolCard: React.FC<ToolCardProps> = ({
  */
 export const ToolCardSkeleton: React.FC = () => (
   <div
-    className="relative bg-slate-700/95 border-2 border-slate-500/70 rounded-2xl p-5 flex flex-col justify-between animate-pulse"
+    className="relative bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col justify-between animate-pulse"
     aria-hidden="true"
   >
     {/* Top Header Row */}
     <div className="flex items-start justify-between gap-3">
       <div className="flex items-center gap-3">
         {/* App Monogram / Icon */}
-        <div className="w-12 h-12 rounded-xl bg-slate-500/70" />
+        <div className="w-9 h-9 rounded-lg bg-slate-500/70" />
         <div>
           <div className="h-4 w-32 rounded bg-slate-500/70" />
           <div className="h-3 w-24 rounded bg-slate-500/50 mt-2" />
@@ -274,7 +299,7 @@ export const ToolCardSkeleton: React.FC = () => (
       </div>
 
       {/* Upvote Button */}
-      <div className="flex flex-col items-center justify-center min-w-[50px] px-3 py-2 rounded-xl border border-slate-500/50 bg-slate-600/80">
+      <div className="flex flex-col items-center justify-center min-w-[50px] px-3 py-2 rounded-xl border border-slate-700 bg-slate-800/80">
         <div className="w-4 h-4 rounded bg-slate-500/70" />
         <div className="h-3 w-6 rounded bg-slate-500/70 mt-1.5" />
       </div>
@@ -290,7 +315,7 @@ export const ToolCardSkeleton: React.FC = () => (
     </div>
 
     {/* Footer Meta */}
-    <div className="mt-5 pt-3 border-t border-slate-600/60 flex items-center justify-between gap-2">
+    <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
       <div className="flex items-center gap-1.5">
         <div className="h-6 w-16 rounded-full bg-slate-500/60" />
         <div className="h-5 w-20 rounded-md bg-slate-500/60" />
