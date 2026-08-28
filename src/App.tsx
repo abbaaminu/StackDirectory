@@ -214,7 +214,7 @@ export default function App() {
   });
 
   return (
-    <div className="bg-[#080C14] min-h-screen text-slate-100 relative overflow-x-hidden">
+    <div className="bg-slate-50 min-h-screen text-slate-900 font-sans relative overflow-x-hidden">
       {/* Flippa-Style City / Architecture Hero Background */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[600px] overflow-hidden">
         <img
@@ -223,8 +223,8 @@ export default function App() {
           className="w-full h-full object-cover object-center"
           loading="eager"
         />
-        {/* Dark gradient overlay so the bold hero title + tagline stand out clearly */}
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-[#080C14]/90 to-[#080C14]" />
+        {/* Light gradient overlay so the hero blends cleanly into the page */}
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-100/80 via-slate-50/90 to-slate-50" />
       </div>
 
       {/* Ambient Header Glow */}
@@ -241,12 +241,12 @@ export default function App() {
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 max-w-md">
-          <div className="p-4 rounded-xl shadow-2xl flex items-center gap-3 bg-zinc-900/95 text-zinc-200 border border-zinc-700 text-xs font-medium">
+          <div className="p-4 rounded-xl shadow-2xl flex items-center gap-3 bg-white text-slate-800 border border-slate-200 text-xs font-medium">
             <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
             <span>{toastMessage}</span>
             <button
               onClick={() => setToastMessage(null)}
-              className="text-zinc-500 hover:text-white ml-auto"
+              className="text-slate-400 hover:text-slate-900 ml-auto"
             >
               <X className="w-4 h-4" />
             </button>
@@ -258,21 +258,21 @@ export default function App() {
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-3xl font-bold">StackDirectory</h1>
-            <p className="text-sm text-slate-400 mt-1">
+            <p className="text-sm text-slate-500 mt-1">
               Discover, upvote, and submit the best developer tools &amp;
               startups.
             </p>
           </div>
 
           {/* View Mode Toggle */}
-          <div className="inline-flex items-center rounded-xl border border-zinc-800 bg-zinc-900 p-1 gap-1">
+          <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-1 gap-1 shadow-sm">
             <button
               onClick={() => setViewMode("all")}
               className={[
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition",
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition",
                 viewMode === "all"
-                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/50"
-                  : "text-slate-300 hover:text-white border border-transparent",
+                  ? "bg-slate-900 text-white border-transparent"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent",
               ].join(" ")}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
@@ -281,15 +281,15 @@ export default function App() {
             <button
               onClick={() => setViewMode("for_sale")}
               className={[
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition",
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition",
                 viewMode === "for_sale"
-                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/50"
-                  : "text-slate-300 hover:text-white border border-transparent",
+                  ? "bg-slate-900 text-white border-transparent"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent",
               ].join(" ")}
             >
               <ShoppingBag className="w-3.5 h-3.5" />
               For Sale (Acquire Mode)
-              <span className="w-5 h-5 rounded-md bg-zinc-800 text-[10px] font-bold grid place-items-center">
+              <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold grid place-items-center">
                 {tools.filter((t) => t.is_for_sale).length}
               </span>
             </button>
@@ -297,17 +297,17 @@ export default function App() {
 
           {/* Pricing Filter */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-medium">Pricing:</span>
+            <span className="text-xs text-slate-500 font-medium">Pricing:</span>
             <div className="flex flex-wrap gap-1.5">
               {PRICING_FILTERS.map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setPricingFilter(filter)}
                   className={[
-                    "px-3 py-1.5 rounded-lg text-xs font-semibold border transition",
+                    "px-3 py-1.5 rounded-lg text-xs font-medium border transition",
                     pricingFilter === filter
-                      ? "bg-amber-500/20 text-amber-300 border-amber-500/50"
-                      : "bg-zinc-900 text-slate-300 border-zinc-700 hover:border-zinc-600",
+                      ? "bg-slate-900 text-white border-transparent"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100",
                   ].join(" ")}
                 >
                   {filter}
@@ -325,12 +325,12 @@ export default function App() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by name, tagline, category, or tech stack..."
-            className="w-full pl-10 pr-10 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-white text-sm placeholder-slate-400 focus:border-amber-400 focus:ring-1 focus:ring-amber-500/40 outline-none transition"
+            className="w-full pl-10 pr-10 py-3 rounded-xl bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900"
             >
               <X className="w-4 h-4" />
             </button>
@@ -348,7 +348,7 @@ export default function App() {
             ))}
           </div>
         ) : error ? (
-          <div className="border border-red-500/50 bg-red-500/10 rounded-lg p-4 text-red-200 text-sm">
+          <div className="border border-red-300 bg-red-50 rounded-lg p-4 text-red-700 text-sm">
             <p className="font-semibold mb-1">Failed to load tools</p>
             <p>{error}</p>
           </div>
@@ -364,8 +364,8 @@ export default function App() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-20 bg-zinc-900/30 rounded-2xl border border-zinc-800">
-            <p className="text-slate-400">
+          <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
+            <p className="text-slate-500">
               {tools.length === 0
                 ? "No approved tools submitted yet."
                 : "No tools match your current filters."}
@@ -376,7 +376,7 @@ export default function App() {
                 setPricingFilter("All");
                 setViewMode("all");
               }}
-              className="mt-4 px-4 py-2 rounded-lg text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-zinc-950 transition"
+              className="mt-4 px-4 py-2 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-slate-950 transition"
             >
               Reset Filters
             </button>

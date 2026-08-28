@@ -89,13 +89,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     [
       "flex-1 py-2 rounded-lg text-xs font-semibold transition",
       active
-        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-        : "text-slate-300 border border-transparent hover:text-white",
+        ? "bg-white text-slate-900 border border-slate-200 shadow-sm"
+        : "text-slate-500 border border-transparent hover:text-slate-900",
     ].join(" ");
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label={isLogin ? "Log In" : "Create Account"}
@@ -104,14 +104,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* Sleek dark slate glassmorphism container */}
-      <div className="relative w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900/90 backdrop-blur-xl p-6 shadow-2xl animate-slide-up">
+      {/* Light clean panel container */}
+      <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl p-6 animate-slide-up">
         {/* Close (X) button */}
         <button
           type="button"
           onClick={onClose}
           aria-label="Close auth modal"
-          className="absolute top-3 right-3 z-20 text-slate-300 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition"
+          className="absolute top-3 right-3 z-20 text-slate-400 hover:text-slate-900 p-1.5 rounded-lg hover:bg-slate-100 transition"
         >
           <X className="w-5 h-5" />
         </button>
@@ -123,18 +123,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             alt=""
             className="absolute inset-0 w-full h-full object-cover object-center"
           />
-          <div className="absolute inset-0 bg-linear-to-b from-slate-950/30 via-slate-950/60 to-slate-900" />
+          <div className="absolute inset-0 bg-linear-to-b from-slate-900/20 via-slate-900/40 to-white" />
           <div className="relative z-10 h-full flex items-end justify-between p-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-linear-to-tr from-amber-500 via-orange-500 to-amber-300 flex items-center justify-center text-zinc-950 font-black text-lg shadow-lg shadow-amber-500/30">
                 ▲
               </div>
               <div>
-                <div className="text-white font-bold tracking-tight">
+                <div className="text-slate-900 font-bold tracking-tight">
                   StackDirectory
                 </div>
-                <div className="text-[11px] text-slate-300 flex items-center gap-1 mt-0.5">
-                  <Sparkles className="w-3 h-3 text-amber-300" />
+                <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                  <Sparkles className="w-3 h-3 text-amber-500" />
                   <span>
                     {isLogin
                       ? "Welcome back, log in to continue"
@@ -147,7 +147,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Tab buttons: switch between Log In and Create Account */}
-        <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-700 bg-slate-950/50">
+        <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-200 bg-slate-50">
           <button
             type="button"
 
@@ -176,7 +176,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div>
             <label
               htmlFor="auth-email"
-              className="block text-xs font-medium text-slate-300 mb-1.5"
+              className="block text-xs font-medium text-slate-600 mb-1.5"
             >
               Email address
             </label>
@@ -189,7 +189,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-lg bg-slate-950/60 text-white text-sm border border-slate-700 placeholder-slate-500 focus:border-amber-500/70 focus:ring-1 focus:ring-amber-500/30 outline-none transition"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
               />
             </div>
           </div>
@@ -198,7 +198,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div>
             <label
               htmlFor="auth-password"
-              className="block text-xs font-medium text-slate-300 mb-1.5"
+              className="block text-xs font-medium text-slate-600 mb-1.5"
             >
               Password
             </label>
@@ -211,13 +211,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-10 pr-10 py-2.5 rounded-lg bg-slate-950/60 text-white text-sm border border-slate-700 placeholder-slate-500 focus:border-amber-500/70 focus:ring-1 focus:ring-amber-500/30 outline-none transition"
+                className="w-full pl-10 pr-10 py-2.5 rounded-lg bg-slate-50 border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((s) => !s)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200 transition"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 transition"
               >
                 {showPassword ? (
                   <EyeOff className="w-4 h-4" />
@@ -229,7 +229,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
 
           {error && (
-            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+            <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
@@ -238,7 +238,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="submit"
             disabled={submitting}
-            className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-bold text-slate-950 bg-amber-500 hover:bg-amber-400 shadow-md shadow-amber-500/25 active:scale-[0.98] transition disabled:opacity-60 disabled:pointer-events-none"
+            className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-slate-950 bg-amber-500 hover:bg-amber-600 shadow-md transition-all active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none"
           >
             {submitting ? (
               "Please wait…"
@@ -260,7 +260,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <button
               type="button"
               onClick={() => setMode(isLogin ? "signup" : "login")}
-              className="inline-flex items-center gap-0.5 font-semibold text-amber-400 hover:text-amber-300 transition"
+              className="inline-flex items-center gap-0.5 font-semibold text-amber-600 hover:text-amber-700 transition"
             >
               {isLogin ? "Create Account" : "Log In"}
               <ArrowRight className="w-3 h-3" />
