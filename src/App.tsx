@@ -214,7 +214,7 @@ export default function App() {
   });
 
   return (
-    <div className="bg-[#0B0F17] min-h-screen text-slate-100 relative overflow-x-hidden">
+    <div className="bg-[#080C14] min-h-screen text-slate-100 relative overflow-x-hidden">
       {/* Flippa-Style City / Architecture Hero Background */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[600px] overflow-hidden">
         <img
@@ -224,7 +224,7 @@ export default function App() {
           loading="eager"
         />
         {/* Dark gradient overlay so the bold hero title + tagline stand out clearly */}
-        <div className="absolute inset-0 bg-linear-to-b from-slate-950/80 via-slate-950/90 to-[#0B0F17]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-[#080C14]/90 to-[#080C14]" />
       </div>
 
       {/* Ambient Header Glow */}
