@@ -52,15 +52,15 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   const getPricingBadgeColor = (type: string) => {
     switch (type) {
       case "Free":
-        return "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase";
+        return "bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-xs font-semibold";
       case "Freemium":
-        return "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase";
+        return "bg-cyan-50 text-cyan-700 border border-cyan-200 px-2 py-0.5 rounded-full text-xs font-semibold";
       case "Open Source":
-        return "bg-fuchsia-500/15 text-fuchsia-400 border border-fuchsia-500/30 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase";
+        return "bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200 px-2 py-0.5 rounded-full text-xs font-semibold";
       case "Paid":
-        return "bg-amber-500/15 text-amber-400 border border-amber-500/30 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase";
+        return "bg-amber-50 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full text-xs font-semibold";
       default:
-        return "bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase";
+        return "bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-full text-xs font-semibold";
     }
   };
 
@@ -68,10 +68,10 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     <div
       id={`tool-card-${tool.id}`}
 
-      className={`group relative bg-[#131B2E] border border-slate-800/90 hover:border-amber-400/80 shadow-md rounded-xl p-3.5 flex flex-col justify-between min-h-27.5 transition-all duration-200 ${
+      className={`group relative bg-white rounded-xl p-3.5 shadow-md flex flex-col justify-between min-h-[110px] transition-all duration-200 ${
         tool.is_for_sale || tool.is_featured
-          ? "border-amber-400/60"
-          : ""
+          ? "border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.25)]"
+          : "border border-slate-200 hover:border-amber-400/80"
       }`}
     >
       {/* Badges / Ribbons on Top */}
@@ -97,7 +97,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           {/* App Identity */}
           <div className="flex items-center gap-3">
             {/* Compact Dynamic Logo: favicon with 2-letter avatar fallback */}
-            <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0 flex items-center justify-center border border-slate-700/60 bg-linear-to-tr from-amber-500 via-orange-500 to-amber-400">
+            <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0 flex items-center justify-center border border-slate-200 bg-linear-to-tr from-amber-500 via-orange-500 to-amber-400">
               {!logoFailed ? (
                 <img
                   src={logoSrc}
@@ -121,7 +121,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="text-sm font-bold text-white hover:text-amber-400 leading-tight truncate"
+                  className="text-sm font-bold text-slate-900 hover:text-amber-600 leading-tight truncate"
                   title={`Visit ${tool.website_url}`}
                 >
                   {tool.name}
@@ -138,9 +138,13 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                   </span>
                 )}
               </div>
-              {/* Rating & Reviews Row */}
-              <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
-                <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+              {/* Domain URL */}
+              <div className="text-xs text-slate-400 mt-0.5 truncate">
+                {new URL(tool.website_url).hostname.replace("www.", "")}
+              </div>
+              {/* Star Rating & Reviews Row */}
+              <div className="flex items-center gap-1 text-xs text-slate-600 font-medium">
+                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                 <span>{tool.rating ?? "4.5"}</span>
                 <span className="text-slate-500">
                   ({tool.reviews ?? 42} reviews)
@@ -176,10 +180,10 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           <button
             id={`btn-upvote-${tool.id}`}
             onClick={handleUpvote}
-            className={`flex flex-col items-center justify-center min-w-12.5 px-3 py-2 rounded-xl border transition-all active:scale-95 ${
+            className={`flex flex-col items-center justify-center min-w-12.5 px-2.5 py-1 text-xs font-semibold rounded-lg transition-all active:scale-95 ${
               tool.user_has_upvoted
-                ? "bg-amber-500/15 border-amber-400/60 text-amber-300 shadow-sm shadow-amber-500/10"
-                : "bg-slate-800 hover:bg-amber-500/10 border border-slate-700 hover:border-amber-400 text-slate-300 hover:text-amber-300"
+                ? "bg-amber-50 border border-amber-300 text-amber-700"
+                : "bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-400 text-slate-800"
             } ${isUpvoteAnimating ? "scale-110" : ""}`}
             title={
               tool.user_has_upvoted ? "Remove upvote" : "Upvote this startup"
@@ -188,7 +192,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
             <ChevronUp
               className={`w-4 h-4 transition ${
                 tool.user_has_upvoted
-                  ? "text-amber-400 stroke-3"
+                  ? "text-amber-600 stroke-3"
                   : "text-slate-400"
               }`}
             />
@@ -199,20 +203,20 @@ export const ToolCard: React.FC<ToolCardProps> = ({
         </div>
 
         {/* Description / Tagline */}
-        <p className="text-xs text-slate-400 line-clamp-2 leading-snug mt-1">
+        <p className="text-xs text-slate-600 line-clamp-2 leading-snug mt-1">
           {tool.description || tool.tagline}
         </p>
 
         {/* Startup For Sale Highlights Box */}
         {tool.is_for_sale && (
-          <div className="mt-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+          <div className="mt-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
             <div className="grid grid-cols-3 gap-2 text-center">
               {/* Asking Price */}
-              <div className="bg-slate-900 p-2 rounded-lg border border-amber-500/20">
+              <div className="bg-white p-2 rounded-lg border border-amber-200">
                 <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">
                   Asking Price
                 </span>
-                <span className="text-sm font-black text-slate-100 mt-0.5 block">
+                <span className="text-sm font-black text-slate-900 mt-0.5 block">
                   $
                   {tool.asking_price
                     ? tool.asking_price.toLocaleString()
@@ -221,11 +225,11 @@ export const ToolCard: React.FC<ToolCardProps> = ({
               </div>
 
               {/* Monthly Revenue (MRR) */}
-              <div className="bg-slate-900 p-2 rounded-lg border border-slate-700">
+              <div className="bg-white p-2 rounded-lg border border-slate-200">
                 <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">
                   MRR
                 </span>
-                <span className="text-sm font-black text-slate-100 mt-0.5 block">
+                <span className="text-sm font-black text-slate-900 mt-0.5 block">
                   $
                   {tool.monthly_revenue !== undefined
                     ? tool.monthly_revenue.toLocaleString()
@@ -237,11 +241,11 @@ export const ToolCard: React.FC<ToolCardProps> = ({
               </div>
 
               {/* Net Profit */}
-              <div className="bg-slate-900 p-2 rounded-lg border border-slate-700">
+              <div className="bg-white p-2 rounded-lg border border-slate-200">
                 <span className="text-[10px] font-bold text-cyan-600 uppercase tracking-wider block">
                   Net Profit
                 </span>
-                <span className="text-sm font-black text-slate-100 mt-0.5 block">
+                <span className="text-sm font-black text-slate-900 mt-0.5 block">
                   $
                   {tool.monthly_profit !== undefined
                     ? tool.monthly_profit.toLocaleString()
@@ -260,7 +264,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                 {tool.tech_stack.slice(0, 3).map((tech) => (
                   <span
                     key={tech}
-                    className="px-1.5 py-0.2 rounded text-[10px] bg-slate-800 text-slate-300 border border-slate-700 font-mono"
+                    className="px-1.5 py-0.2 rounded text-[10px] bg-white text-slate-600 border border-slate-200 font-mono"
                   >
                     {tech}
                   </span>
@@ -277,10 +281,10 @@ export const ToolCard: React.FC<ToolCardProps> = ({
       </div>
 
       {/* Footer Meta: Category, Pricing, & CTAs */}
-      <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between gap-2">
+      <div className="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           {/* Category Tag */}
-          <span className="bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1 rounded-full text-xs font-medium">
+          <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 rounded-full text-xs font-medium">
             {tool.category}
           </span>
 
@@ -320,7 +324,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
             href={tool.website_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center p-1.5 rounded-lg text-slate-400 hover:text-amber-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-amber-400/60 transition"
+            className="inline-flex items-center justify-center p-1.5 rounded-lg text-slate-500 hover:text-amber-600 bg-slate-100 hover:bg-amber-50 border border-slate-200 hover:border-amber-400 transition"
             title={`Visit ${tool.name}`}
           >
             <ExternalLink className="w-3.5 h-3.5" />
@@ -338,43 +342,43 @@ export const ToolCard: React.FC<ToolCardProps> = ({
  */
 export const ToolCardSkeleton: React.FC = () => (
   <div
-    className="relative bg-[#131B2E] border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between min-h-27.5 animate-pulse"
+    className="relative bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between min-h-27.5 animate-pulse"
     aria-hidden="true"
   >
     {/* Top Header Row */}
     <div className="flex items-start justify-between gap-2.5 mb-1.5">
       <div className="flex items-center gap-3">
         {/* App Monogram / Icon */}
-        <div className="w-8 h-8 rounded-full border border-slate-700/60 bg-slate-700" />
+        <div className="w-8 h-8 rounded-full border border-slate-200 bg-slate-100" />
         <div>
-          <div className="h-4 w-32 rounded bg-slate-700" />
-          <div className="h-3 w-24 rounded bg-slate-700/80 mt-2" />
+          <div className="h-4 w-32 rounded bg-slate-200" />
+          <div className="h-3 w-24 rounded bg-slate-200/80 mt-2" />
         </div>
       </div>
 
       {/* Upvote Button */}
-      <div className="flex flex-col items-center justify-center min-w-12.5 px-3 py-2 rounded-xl border border-slate-700 bg-slate-800">
-        <div className="w-4 h-4 rounded bg-slate-700" />
-        <div className="h-3 w-6 rounded bg-slate-700 mt-1.5" />
+      <div className="flex flex-col items-center justify-center min-w-12.5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-100">
+        <div className="w-4 h-4 rounded bg-slate-200" />
+        <div className="h-3 w-6 rounded bg-slate-200 mt-1.5" />
       </div>
     </div>
 
     {/* Tagline */}
-    <div className="h-3.5 w-3/4 rounded bg-slate-700 mt-5" />
+    <div className="h-3.5 w-3/4 rounded bg-slate-200 mt-5" />
 
     {/* Description */}
     <div className="mt-3 space-y-2">
-      <div className="h-3 w-full rounded bg-slate-700/80" />
-      <div className="h-3 w-2/3 rounded bg-slate-700/80" />
+      <div className="h-3 w-full rounded bg-slate-200/80" />
+      <div className="h-3 w-2/3 rounded bg-slate-200/80" />
     </div>
 
     {/* Footer Meta */}
-    <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+    <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
       <div className="flex items-center gap-1.5">
-        <div className="h-6 w-16 rounded-full bg-slate-700" />
-        <div className="h-5 w-20 rounded-md bg-slate-700" />
+        <div className="h-6 w-16 rounded-full bg-slate-200" />
+        <div className="h-5 w-20 rounded-md bg-slate-200" />
       </div>
-      <div className="h-8 w-8 rounded-lg bg-slate-700" />
+      <div className="h-8 w-8 rounded-lg bg-slate-200" />
     </div>
   </div>
 );
