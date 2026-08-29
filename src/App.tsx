@@ -214,19 +214,7 @@ export default function App() {
   });
 
   return (
-    <div className="bg-slate-50 min-h-screen text-slate-900 font-sans relative overflow-x-hidden">
-      {/* Flippa-Style City / Architecture Hero Background */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[600px] overflow-hidden">
-        <img
-          src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=2000&q=80"
-          alt=""
-          className="w-full h-full object-cover object-center"
-          loading="eager"
-        />
-        {/* Light gradient overlay so the hero blends cleanly into the page */}
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-100/80 via-slate-50/90 to-slate-50" />
-      </div>
-
+    <div className="bg-[#0B0F17] min-h-screen text-slate-100 font-sans relative overflow-x-hidden">
       {/* Ambient Header Glow */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(100%_50%_at_50%_0%,rgba(245,158,11,0.12)_0%,transparent_100%)]" />
       {/* Header with Submit App button */}
