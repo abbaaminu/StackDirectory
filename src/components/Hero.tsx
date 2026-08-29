@@ -42,7 +42,7 @@ export const Hero: React.FC<HeroProps> = ({
   onOpenSubmit,
 }) => {
   return (
-    <section className="relative pt-8 pb-10 overflow-hidden">
+    <section className="relative bg-white border-b border-slate-200/80 py-10 px-4 overflow-hidden">
       <div className="relative z-10 flex flex-wrap items-center justify-center gap-2 mb-6">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-white/90 text-slate-700 border border-slate-200 shadow-sm">
           <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -60,13 +60,13 @@ export const Hero: React.FC<HeroProps> = ({
 
       {/* Main Headline */}
       <div className="relative z-10 text-center max-w-3xl mx-auto space-y-4">
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
           Startup Discovery & <br className="hidden sm:inline" />
           <span className="bg-linear-to-r from-amber-500 via-orange-500 to-amber-600 bg-clip-text text-transparent">
             Acquisition Marketplace
           </span>
         </h1>
-        <p className="text-base sm:text-lg text-slate-400 font-normal max-w-2xl mx-auto leading-relaxed">
+        <p className="text-sm sm:text-base text-slate-500 mt-2 max-w-2xl mx-auto text-center">
           The hub for next-gen developer utilities, AI apps, and vetted
           micro-SaaS businesses for sale. List for 100% free ($0), boost
           instantly with Paddle ($19 USD), or buy profitable software with 10%
@@ -100,7 +100,7 @@ export const Hero: React.FC<HeroProps> = ({
       {/* Instant Search and Filters Bar */}
       <div className="relative z-10 mt-10 max-w-4xl mx-auto space-y-4">
         {/* Search Input Box */}
-        <div className="relative flex items-center">
+        <div className="relative flex items-center max-w-2xl mx-auto">
           <Search className="absolute left-4 w-5 h-5 text-slate-400 pointer-events-none" />
           <input
             id="input-search-tools"
@@ -108,7 +108,7 @@ export const Hero: React.FC<HeroProps> = ({
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search startups for sale, MRR, tech stacks, or desktop utilities..."
-            className="w-full pl-12 pr-12 py-3.5 rounded-xl bg-[#131B2E] text-white placeholder-slate-400 border border-slate-700 focus:border-amber-400 text-sm md:text-base outline-none transition"
+            className="w-full pl-12 pr-10 py-3 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white text-slate-900 placeholder-slate-400 shadow-inner text-sm md:text-base outline-none transition"
           />
           {searchQuery && (
             <button

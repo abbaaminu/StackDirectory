@@ -214,7 +214,7 @@ export default function App() {
   });
 
   return (
-    <div className="bg-[#0B0F17] min-h-screen text-slate-100 font-sans relative overflow-x-hidden">
+    <div className="bg-[#F8FAFC] min-h-screen text-slate-900 font-sans relative overflow-x-hidden">
       {/* Ambient Header Glow */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(100%_50%_at_50%_0%,rgba(245,158,11,0.12)_0%,transparent_100%)]" />
       {/* Header with Submit App button */}
@@ -327,7 +327,7 @@ export default function App() {
 
         {loading ? (
           <div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 max-w-7xl mx-auto px-4"
+            className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
             aria-busy="true"
             aria-label="Loading tools"
           >
@@ -341,7 +341,7 @@ export default function App() {
             <p>{error}</p>
           </div>
         ) : displayedTools.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 max-w-7xl mx-auto px-4">
+          <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {displayedTools.map((tool) => (
               <ToolCard
                 key={tool.id}
