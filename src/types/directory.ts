@@ -16,6 +16,11 @@ export interface Tool {
   created_at: string;
   user_has_upvoted?: boolean;
 
+  // Compact card metadata
+  rating?: number;
+  reviews?: number;
+  is_favorite?: boolean;
+
   // Startup Marketplace Fields
   is_for_sale?: boolean;
   asking_price?: number;

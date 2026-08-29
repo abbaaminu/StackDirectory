@@ -327,7 +327,7 @@ export default function App() {
 
         {loading ? (
           <div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto px-4 py-8"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 max-w-7xl mx-auto px-4"
             aria-busy="true"
             aria-label="Loading tools"
           >
@@ -341,7 +341,7 @@ export default function App() {
             <p>{error}</p>
           </div>
         ) : displayedTools.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto px-4 py-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 max-w-7xl mx-auto px-4">
             {displayedTools.map((tool) => (
               <ToolCard
                 key={tool.id}

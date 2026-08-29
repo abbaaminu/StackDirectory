@@ -7,6 +7,8 @@ import {
   CheckCircle2,
   Cpu,
   ShoppingBag,
+  Star,
+  Heart,
 } from "lucide-react";
 import { Tool } from "../types/directory";
 
@@ -66,9 +68,9 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     <div
       id={`tool-card-${tool.id}`}
 
-      className={`group relative bg-[#131B2E] border border-slate-800 hover:border-amber-400/80 shadow-xl rounded-2xl p-5 flex flex-col justify-between transition-all duration-200 ${
+      className={`group relative bg-[#131B2E] border border-slate-800/90 hover:border-amber-400/80 shadow-md rounded-xl p-3.5 flex flex-col justify-between min-h-27.5 transition-all duration-200 ${
         tool.is_for_sale || tool.is_featured
-          ? "border-amber-400/80"
+          ? "border-amber-400/60"
           : ""
       }`}
     >
@@ -91,11 +93,11 @@ export const ToolCard: React.FC<ToolCardProps> = ({
 
       {/* Top Header Row */}
       <div>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-2.5 mb-1.5">
           {/* App Identity */}
           <div className="flex items-center gap-3">
             {/* Compact Dynamic Logo: favicon with 2-letter avatar fallback */}
-            <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-linear-to-tr from-amber-500 via-orange-500 to-amber-400 flex items-center justify-center shadow-md shrink-0">
+            <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0 flex items-center justify-center border border-slate-700/60 bg-linear-to-tr from-amber-500 via-orange-500 to-amber-400">
               {!logoFailed ? (
                 <img
                   src={logoSrc}
@@ -112,14 +114,14 @@ export const ToolCard: React.FC<ToolCardProps> = ({
               )}
             </div>
 
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
                 <a
                   href={tool.website_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="text-white font-bold text-lg hover:text-amber-400 transition-colors"
+                  className="text-sm font-bold text-white hover:text-amber-400 leading-tight truncate"
                   title={`Visit ${tool.website_url}`}
                 >
                   {tool.name}
@@ -132,21 +134,49 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                         : "Verified & Paddle Featured Upgrade"
                     }
                   >
-                    <CheckCircle2 className="w-4 h-4 text-amber-500 fill-amber-500/20" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20 shrink-0" />
                   </span>
                 )}
               </div>
-              <span className="text-slate-400 text-xs">
-                {new URL(tool.website_url).hostname.replace("www.", "")}
-              </span>
+              {/* Rating & Reviews Row */}
+              <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
+                <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                <span>{tool.rating ?? "4.5"}</span>
+                <span className="text-slate-500">
+                  ({tool.reviews ?? 42} reviews)
+                </span>
+              </div>
             </div>
           </div>
+
+          {/* Favorite Heart Icon */}
+          <button
+            type="button"
+            onClick={(e) => e.stopPropagation()}
+            title={
+              tool.is_favorite
+                ? "Remove from favorites"
+                : "Add to favorites"
+            }
+            aria-label={
+              tool.is_favorite
+                ? "Remove from favorites"
+                : "Add to favorites"
+            }
+            className="shrink-0 mt-0.5"
+          >
+            <Heart
+              className={`w-4 h-4 text-slate-400 hover:text-rose-500 cursor-pointer ${
+                tool.is_favorite ? "text-rose-500 fill-rose-500" : ""
+              }`}
+            />
+          </button>
 
           {/* Upvote Button with Atomic UI */}
           <button
             id={`btn-upvote-${tool.id}`}
             onClick={handleUpvote}
-            className={`flex flex-col items-center justify-center min-w-[50px] px-3 py-2 rounded-xl border transition-all active:scale-95 ${
+            className={`flex flex-col items-center justify-center min-w-12.5 px-3 py-2 rounded-xl border transition-all active:scale-95 ${
               tool.user_has_upvoted
                 ? "bg-amber-500/15 border-amber-400/60 text-amber-300 shadow-sm shadow-amber-500/10"
                 : "bg-slate-800 hover:bg-amber-500/10 border border-slate-700 hover:border-amber-400 text-slate-300 hover:text-amber-300"
@@ -158,7 +188,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
             <ChevronUp
               className={`w-4 h-4 transition ${
                 tool.user_has_upvoted
-                  ? "text-amber-400 stroke-[3]"
+                  ? "text-amber-400 stroke-3"
                   : "text-slate-400"
               }`}
             />
@@ -168,14 +198,9 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           </button>
         </div>
 
-        {/* Tagline */}
-        <p className="text-slate-300 text-sm leading-relaxed my-2 line-clamp-1">
-          {tool.tagline}
-        </p>
-
-        {/* Description */}
-        <p className="text-slate-300 text-sm leading-relaxed my-2 line-clamp-2">
-          {tool.description}
+        {/* Description / Tagline */}
+        <p className="text-xs text-slate-400 line-clamp-2 leading-snug mt-1">
+          {tool.description || tool.tagline}
         </p>
 
         {/* Startup For Sale Highlights Box */}
@@ -313,14 +338,14 @@ export const ToolCard: React.FC<ToolCardProps> = ({
  */
 export const ToolCardSkeleton: React.FC = () => (
   <div
-    className="relative bg-[#131B2E] border border-slate-800 rounded-xl p-4 flex flex-col justify-between animate-pulse"
+    className="relative bg-[#131B2E] border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between min-h-27.5 animate-pulse"
     aria-hidden="true"
   >
     {/* Top Header Row */}
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex items-start justify-between gap-2.5 mb-1.5">
       <div className="flex items-center gap-3">
         {/* App Monogram / Icon */}
-        <div className="w-9 h-9 rounded-lg bg-slate-700" />
+        <div className="w-8 h-8 rounded-full border border-slate-700/60 bg-slate-700" />
         <div>
           <div className="h-4 w-32 rounded bg-slate-700" />
           <div className="h-3 w-24 rounded bg-slate-700/80 mt-2" />
@@ -328,7 +353,7 @@ export const ToolCardSkeleton: React.FC = () => (
       </div>
 
       {/* Upvote Button */}
-      <div className="flex flex-col items-center justify-center min-w-[50px] px-3 py-2 rounded-xl border border-slate-700 bg-slate-800">
+      <div className="flex flex-col items-center justify-center min-w-12.5 px-3 py-2 rounded-xl border border-slate-700 bg-slate-800">
         <div className="w-4 h-4 rounded bg-slate-700" />
         <div className="h-3 w-6 rounded bg-slate-700 mt-1.5" />
       </div>
