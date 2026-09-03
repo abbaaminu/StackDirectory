@@ -57,6 +57,7 @@ export interface SubmissionFormState {
   pricing_type: PricingType;
   tier: "free" | "paddle_featured";
   customer_email?: string;
+  icon_url?: string;
 
   // Startup Marketplace Fields
   is_for_sale: boolean;

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   X,
   Sparkles,
@@ -49,6 +49,84 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
   const [showCheckoutSuccess, setShowCheckoutSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
+  const [autoFillMessage, setAutoFillMessage] = useState("");
+
+  const getUrlDetails = (value: string) => {
+    try {
+      const normalized = value.match(/^https?:\/\//i) ? value : `https://${value}`;
+      const url = new URL(normalized);
+      if (!url.hostname.includes(".")) return null;
+      const domain = url.hostname.replace(/^www\./i, "");
+      const firstLabel = domain.split(".")[0].replace(/[-_]+/g, " ");
+      const name = firstLabel.replace(/\b\w/g, (letter) => letter.toUpperCase());
+      return { normalized: url.toString(), domain, name };
+    } catch {
+      return null;
+    }
+  };
+
+  const applyUrlDefaults = (value: string) => {
+    const details = getUrlDetails(value);
+    if (!details) {
+      setFormData((current) => ({ ...current, website_url: value }));
+      return;
+    }
+    setFormData((current) => ({
+      ...current,
+      website_url: value,
+      name: current.name.trim() ? current.name : details.name,
+      icon_url: current.icon_url || `https://www.google.com/s2/favicons?domain=${details.domain}&sz=128`,
+    }));
+  };
+
+  useEffect(() => {
+    const details = getUrlDetails(formData.website_url);
+    if (details && !formData.icon_url) {
+      setFormData((current) => ({
+        ...current,
+        name: current.name.trim() ? current.name : details.name,
+        icon_url: `https://www.google.com/s2/favicons?domain=${details.domain}&sz=128`,
+      }));
+    }
+  }, [formData.website_url, formData.icon_url]);
+
+  const handleAutoFill = async () => {
+    const details = getUrlDetails(formData.website_url);
+    if (!details) {
+      setErrorMsg("Enter a valid website URL before using Auto-fill Details.");
+      return;
+    }
+    setIsAutoFilling(true);
+    setAutoFillMessage("");
+    try {
+      const response = await fetch(details.normalized, { headers: { Accept: "text/html" } });
+      if (!response.ok) throw new Error("Website unavailable");
+      const html = await response.text();
+      const document = new DOMParser().parseFromString(html, "text/html");
+      const title = document.querySelector('meta[property="og:title"]')?.getAttribute("content") || document.title;
+      const description = document.querySelector('meta[property="og:description"]')?.getAttribute("content") || document.querySelector('meta[name="description"]')?.getAttribute("content");
+      const image = document.querySelector('meta[property="og:image"]')?.getAttribute("content");
+      setFormData((current) => ({
+        ...current,
+        name: current.name.trim() || title?.trim() || details.name,
+        tagline: current.tagline.trim() || description?.trim() || `A developer tool from ${details.domain}`,
+        description: current.description.trim() || description?.trim() || current.tagline.trim(),
+        icon_url: image || current.icon_url || `https://www.google.com/s2/favicons?domain=${details.domain}&sz=128`,
+      }));
+      setAutoFillMessage("Details filled from the website.");
+    } catch {
+      setFormData((current) => ({
+        ...current,
+        name: current.name.trim() || details.name,
+        tagline: current.tagline.trim() || `Developer tool at ${details.domain}`,
+        icon_url: current.icon_url || `https://www.google.com/s2/favicons?domain=${details.domain}&sz=128`,
+      }));
+      setAutoFillMessage("Could not read the site directly. Added domain-based details.");
+    } finally {
+      setIsAutoFilling(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -111,12 +189,14 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       tagline: formData.tagline.trim(),
       description: formData.description.trim() || formData.tagline.trim(),
       website_url: normalizedUrl,
+      icon_url: formData.icon_url || `https://www.google.com/s2/favicons?domain=${getUrlDetails(normalizedUrl)?.domain || normalizedUrl}&sz=128`,
       category:
         formData.category === "All" ? "Developer Tools" : formData.category,
       pricing_type: formData.pricing_type,
       upvotes: formData.tier === "paddle_featured" ? 1 : 0,
       is_approved: false,
       is_featured: false,
+      status: "pending",
       paddle_customer_id: null,
       created_at: new Date().toISOString(),
       user_has_upvoted: formData.tier === "paddle_featured",
@@ -493,13 +573,20 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 <input
                   type="text"
                   value={formData.website_url}
-                  onChange={(e) =>
-                    setFormData({ ...formData, website_url: e.target.value })
-                  }
+                  onChange={(e) => applyUrlDefaults(e.target.value)}
                   placeholder="https://yourapp.com"
                   required
                   className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition"
                 />
+                <button
+                  type="button"
+                  onClick={() => void handleAutoFill()}
+                  disabled={isAutoFilling}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-[11px] font-bold text-amber-300 hover:bg-amber-500/20 disabled:opacity-60"
+                >
+                  {isAutoFilling ? "Fetching details..." : "Auto-fill Details"}
+                </button>
+                {autoFillMessage && <p className="mt-1 text-[10px] text-emerald-400">{autoFillMessage}</p>}
               </div>
 
               <div>

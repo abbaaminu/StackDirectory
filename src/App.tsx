@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, X, CheckCircle2, ShoppingBag, LayoutGrid } from "lucide-react";
-import supabase, { isSupabaseConfigured } from "./lib/supabase";
+import supabase, { isSupabaseConfigured, pendingToolDefaults } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import type { Tool, PricingType } from "./types/directory";
 import { INITIAL_TOOLS } from "./data/mockTools";
@@ -198,9 +198,8 @@ export default function App() {
       pricing_type: newTool.pricing_type,
       category: newTool.category,
       upvotes: newTool.upvotes ?? 0,
-      is_approved: newTool.is_approved ?? false,
+      ...pendingToolDefaults,
       is_featured: newTool.is_featured ?? false,
-      status: "pending" as const,
       paddle_customer_id: newTool.paddle_customer_id ?? null,
       is_for_sale: newTool.is_for_sale ?? false,
       asking_price: newTool.asking_price ?? null,
@@ -210,14 +209,23 @@ export default function App() {
       tech_stack: newTool.tech_stack ?? [],
     };
 
+    const saveSubmissionLocally = async () => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(LOCAL_TOOLS_KEY) || "[]");
+        const existing = Array.isArray(parsed) ? parsed as Tool[] : [];
+        localStorage.setItem(LOCAL_TOOLS_KEY, JSON.stringify([
+          ...existing,
+          { ...newTool, ...pendingToolDefaults },
+        ]));
+        showToast(`📋 "${newTool.name}" saved locally for review.`);
+        await fetchApprovedTools();
+      } catch {
+        showToast(`❌ Could not save "${newTool.name}" in this browser.`);
+      }
+    };
+
     if (!isSupabaseConfigured || !supabase) {
-      const existing = JSON.parse(localStorage.getItem(LOCAL_TOOLS_KEY) || "[]") as Tool[];
-      localStorage.setItem(LOCAL_TOOLS_KEY, JSON.stringify([
-        ...existing,
-        { ...newTool, is_approved: false, status: "pending" },
-      ]));
-      showToast(`📋 "${newTool.name}" saved locally for review.`);
-      await fetchApprovedTools();
+      await saveSubmissionLocally();
       return;
     }
 
@@ -225,7 +233,7 @@ export default function App() {
 
     if (error) {
       console.error("Failed to submit tool:", error.message);
-      showToast(`❌ Failed to submit "${newTool.name}". Please try again.`);
+      await saveSubmissionLocally();
       return;
     }
 
