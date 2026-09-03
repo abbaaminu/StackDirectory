@@ -226,27 +226,31 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       tech_stack: formData.is_for_sale ? parsedTechStack : undefined,
     };
 
+    const handleDirectSubmit = async () => {
+      await onSubmitTool(baseTool, true);
+      setSubmissionSuccess(true);
+      setIsSubmitting(false);
+      window.setTimeout(() => {
+        setSubmissionSuccess(false);
+        setFormData({
+          name: "", tagline: "", description: "", website_url: "",
+          category: "Developer Tools", pricing_type: "Freemium", tier: "free",
+          customer_email: "", is_for_sale: false, asking_price: "",
+          monthly_revenue: "", monthly_profit: "", seller_contact: "",
+          tech_stack: "Next.js, Supabase, Tailwind CSS",
+        });
+        setStep(1);
+        onClose();
+      }, 1500);
+    };
+
     if (formData.tier === "paddle_featured") {
       setIsProcessingCheckout(true);
       const paddle = window.Paddle;
       const priceId = import.meta.env.VITE_PADDLE_FEATURED_PRICE_ID;
       if (!paddle || !priceId) {
         setIsProcessingCheckout(false);
-        await onSubmitTool(baseTool, true);
-        setSubmissionSuccess(true);
-        setIsSubmitting(false);
-        window.setTimeout(() => {
-          setSubmissionSuccess(false);
-          setFormData({
-            name: "", tagline: "", description: "", website_url: "",
-            category: "Developer Tools", pricing_type: "Freemium", tier: "free",
-            customer_email: "", is_for_sale: false, asking_price: "",
-            monthly_revenue: "", monthly_profit: "", seller_contact: "",
-            tech_stack: "Next.js, Supabase, Tailwind CSS",
-          });
-          setStep(1);
-          onClose();
-        }, 1500);
+        await handleDirectSubmit();
         return;
       }
 
@@ -264,13 +268,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       } catch (error) {
         console.error("Paddle checkout failed:", error);
         setIsProcessingCheckout(false);
-        await onSubmitTool(baseTool, true);
-        setSubmissionSuccess(true);
-        setIsSubmitting(false);
-        window.setTimeout(() => {
-          setSubmissionSuccess(false);
-          onClose();
-        }, 1500);
+        await handleDirectSubmit();
       }
     } else {
       // Free Submission -> Queue for review

@@ -105,14 +105,14 @@ export interface Database {
           id: string;
           conversation_id: string;
           sender_id: string;
-          message: string;
+          message_text: string;
           created_at: string;
         };
         Insert: {
           id?: string;
           conversation_id: string;
           sender_id: string;
-          message: string;
+          message_text: string;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["deal_messages"]["Insert"]>;
