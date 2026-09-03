@@ -18,12 +18,14 @@ interface AcquisitionModalProps {
   isOpen: boolean;
   onClose: () => void;
   tool: Tool | null;
+  onOpenDealRoom?: (tool: Tool) => void;
 }
 
 export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
   isOpen,
   onClose,
   tool,
+  onOpenDealRoom,
 }) => {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
@@ -175,6 +177,16 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
               <CheckCircle2 className="w-3.5 h-3.5" />
               Done
             </button>
+            {onOpenDealRoom && (
+              <button
+                type="button"
+                onClick={() => onOpenDealRoom(tool)}
+                className="mt-2 inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-5 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                Start Acquisition Offer / Chat
+              </button>
+            )}
           </div>
         ) : (
           /* Offer Form State */

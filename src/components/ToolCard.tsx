@@ -22,12 +22,14 @@ interface ToolCardProps {
   onOpenUpgradeForTool?: (tool: Tool) => void;
   onOpenAcquisition?: (tool: Tool) => void;
   onOpenDetails?: (tool: Tool) => void;
+  onOpenDealRoom?: (tool: Tool) => void;
 }
 
 export const ToolCard: React.FC<ToolCardProps> = ({
   tool,
   onToggleUpvote,
   onOpenDetails,
+  onOpenDealRoom,
 }) => {
   const [isUpvoteAnimating, setIsUpvoteAnimating] = useState(false);
   const [logoSource, setLogoSource] = useState<"custom" | "horse" | "google" | "initial">(
@@ -127,7 +129,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                 alt={`${tool.name} logo`}
                 loading="lazy"
                 referrerPolicy="no-referrer"
-                onError={() => setLogoSource((current) => current === "horse" ? "google" : "initial")}
+                onError={() => setLogoSource((current) => current === "custom" || current === "horse" ? (current === "custom" ? "horse" : "google") : "initial")}
                 className="w-full h-full object-cover"
               />
             ) : (
@@ -172,6 +174,15 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           <span className={getPricingBadgeColor(tool.pricing_type)}>
             {tool.pricing_type}
           </span>
+          {tool.is_for_sale && onOpenDealRoom && (
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); onOpenDealRoom(tool); }}
+              className="rounded-md bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-800 hover:bg-amber-200"
+            >
+              Request Details / Contact Founder
+            </button>
+          )}
         </div>
       </div>
 

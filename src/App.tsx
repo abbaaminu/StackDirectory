@@ -11,6 +11,7 @@ import { AcquisitionModal } from "./components/AcquisitionModal";
 import { AuthModal } from "./components/AuthModal";
 import { AdminQueueModal } from "./components/AdminQueueModal";
 import { ToolDetailModal } from "./components/ToolDetailModal";
+import { DealRoomModal } from "./components/DealRoomModal";
 
 const PRICING_FILTERS: ReadonlyArray<"All" | PricingType> = [
   "All",
@@ -65,6 +66,7 @@ export default function App() {
   const [selectedAcquisitionTool, setSelectedAcquisitionTool] =
     useState<Tool | null>(null);
   const [selectedDetailTool, setSelectedDetailTool] = useState<Tool | null>(null);
+  const [selectedDealRoomTool, setSelectedDealRoomTool] = useState<Tool | null>(null);
 
   // Auth modal (Log In / Sign Up)
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -481,6 +483,7 @@ export default function App() {
                 onToggleUpvote={handleToggleUpvote}
                 onOpenAcquisition={(t) => setSelectedAcquisitionTool(t)}
                 onOpenDetails={(t) => setSelectedDetailTool(t)}
+                onOpenDealRoom={(t) => setSelectedDealRoomTool(t)}
               />
             ))}
           </div>
@@ -555,6 +558,10 @@ export default function App() {
         isOpen={!!selectedAcquisitionTool}
         onClose={() => setSelectedAcquisitionTool(null)}
         tool={selectedAcquisitionTool}
+        onOpenDealRoom={(tool) => {
+          setSelectedAcquisitionTool(null);
+          setSelectedDealRoomTool(tool);
+        }}
       />}
 
       {isAuthenticated && <ToolDetailModal
@@ -562,6 +569,13 @@ export default function App() {
         tool={selectedDetailTool}
         onClose={() => setSelectedDetailTool(null)}
         onToggleUpvote={(toolId) => void handleToggleUpvote(toolId)}
+      />}
+
+      {isAuthenticated && <DealRoomModal
+        isOpen={Boolean(selectedDealRoomTool)}
+        tool={selectedDealRoomTool}
+        userId={session?.user.id ?? "local-demo-user"}
+        onClose={() => setSelectedDealRoomTool(null)}
       />}
 
       {/* Auth Modal (Log In / Sign Up) */}

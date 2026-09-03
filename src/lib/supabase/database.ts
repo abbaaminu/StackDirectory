@@ -81,6 +81,42 @@ export interface Database {
           Database["public"]["Tables"]["acquisition_offers"]["Insert"]
         >;
       };
+      deal_conversations: {
+        Row: {
+          id: string;
+          tool_id: string;
+          buyer_id: string;
+          seller_id: string | null;
+          nda_signed: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tool_id: string;
+          buyer_id: string;
+          seller_id?: string | null;
+          nda_signed?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["deal_conversations"]["Insert"]>;
+      };
+      deal_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_id: string;
+          message: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender_id: string;
+          message: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["deal_messages"]["Insert"]>;
+      };
     };
     Functions: {
       toggle_tool_upvote: {
