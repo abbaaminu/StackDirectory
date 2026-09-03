@@ -10,6 +10,7 @@ import { SubmitModal } from "./components/SubmitModal";
 import { AcquisitionModal } from "./components/AcquisitionModal";
 import { AuthModal } from "./components/AuthModal";
 import { AdminQueueModal } from "./components/AdminQueueModal";
+import { ToolDetailModal } from "./components/ToolDetailModal";
 
 const PRICING_FILTERS: ReadonlyArray<"All" | PricingType> = [
   "All",
@@ -63,6 +64,7 @@ export default function App() {
   // Acquisition modal
   const [selectedAcquisitionTool, setSelectedAcquisitionTool] =
     useState<Tool | null>(null);
+  const [selectedDetailTool, setSelectedDetailTool] = useState<Tool | null>(null);
 
   // Auth modal (Log In / Sign Up)
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -262,6 +264,7 @@ export default function App() {
       const isUpvoting = !tool.user_has_upvoted;
       saveVotedTools(isUpvoting ? [...new Set([...votedTools, toolId])] : votedTools.filter((id) => id !== toolId));
       setTools((prev) => prev.map((item) => item.id === toolId ? { ...item, upvotes: nextUpvotes, user_has_upvoted: isUpvoting } : item));
+      setSelectedDetailTool((current) => current?.id === toolId ? { ...current, upvotes: nextUpvotes, user_has_upvoted: isUpvoting } : current);
       showToast(isUpvoting ? "Upvote added." : "Upvote removed.");
       return;
     }
@@ -292,6 +295,15 @@ export default function App() {
             }
           : t,
       ),
+    );
+    setSelectedDetailTool((current) =>
+      current?.id === toolId
+        ? {
+            ...current,
+            upvotes: result?.upvotes ?? current.upvotes,
+            user_has_upvoted: result?.voted ?? current.user_has_upvoted,
+          }
+        : current,
     );
     showToast(result?.voted ? "Upvote added." : "Upvote removed.");
   };
@@ -468,6 +480,7 @@ export default function App() {
                 tool={tool}
                 onToggleUpvote={handleToggleUpvote}
                 onOpenAcquisition={(t) => setSelectedAcquisitionTool(t)}
+                onOpenDetails={(t) => setSelectedDetailTool(t)}
               />
             ))}
           </div>
@@ -542,6 +555,13 @@ export default function App() {
         isOpen={!!selectedAcquisitionTool}
         onClose={() => setSelectedAcquisitionTool(null)}
         tool={selectedAcquisitionTool}
+      />}
+
+      {isAuthenticated && <ToolDetailModal
+        isOpen={Boolean(selectedDetailTool)}
+        tool={selectedDetailTool}
+        onClose={() => setSelectedDetailTool(null)}
+        onToggleUpvote={(toolId) => void handleToggleUpvote(toolId)}
       />}
 
       {/* Auth Modal (Log In / Sign Up) */}

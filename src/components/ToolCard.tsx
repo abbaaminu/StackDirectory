@@ -10,9 +10,9 @@ import { Tool } from "../types/directory";
 
 const getHostname = (url: string): string => {
   try {
-    return new URL(url).hostname.replace(/^www\./, "");
+    return new URL(url).hostname;
   } catch {
-    return url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    return "";
   }
 };
 
@@ -21,20 +21,27 @@ interface ToolCardProps {
   onToggleUpvote: (toolId: string) => void;
   onOpenUpgradeForTool?: (tool: Tool) => void;
   onOpenAcquisition?: (tool: Tool) => void;
+  onOpenDetails?: (tool: Tool) => void;
 }
 
 export const ToolCard: React.FC<ToolCardProps> = ({
   tool,
   onToggleUpvote,
+  onOpenDetails,
 }) => {
   const [isUpvoteAnimating, setIsUpvoteAnimating] = useState(false);
-  const [logoFailed, setLogoFailed] = useState(false);
+  const [logoSource, setLogoSource] = useState<"custom" | "horse" | "google" | "initial">(
+    tool.icon_url ? "custom" : "horse",
+  );
 
   // Compact, dynamic favicon logo (graceful 2-letter avatar fallback)
   const domain = getHostname(tool.website_url);
-  const logoSrc =
-    tool.icon_url ||
-    `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+  const faviconFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+  const logoSrc = logoSource === "custom" && tool.icon_url
+    ? tool.icon_url
+    : logoSource === "horse"
+      ? `https://icon.horse/icon/${domain}`
+      : faviconFallback;
 
   const handleUpvote = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -61,6 +68,12 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   return (
     <div
       id={`tool-card-${tool.id}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpenDetails?.(tool)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") onOpenDetails?.(tool);
+      }}
       className={`group relative bg-white border border-slate-200/80 hover:border-amber-400/90 shadow-xs hover:shadow-md rounded-2xl p-4 flex items-start gap-3.5 transition-all duration-200 ${
         tool.is_for_sale || tool.is_featured ? "border-amber-400/70" : ""
       }`}
@@ -108,19 +121,20 @@ export const ToolCard: React.FC<ToolCardProps> = ({
         <div className="flex items-start gap-2.5">
           {/* Circular brand favicon */}
           <div className="relative w-9 h-9 rounded-full border border-slate-100 overflow-hidden shrink-0 flex items-center justify-center bg-linear-to-tr from-amber-500 via-orange-500 to-amber-400">
-            {!logoFailed ? (
+            {logoSource !== "initial" ? (
               <img
                 src={logoSrc}
                 alt={`${tool.name} logo`}
                 loading="lazy"
                 referrerPolicy="no-referrer"
-                onError={() => setLogoFailed(true)}
+                onError={() => setLogoSource((current) => current === "horse" ? "google" : "initial")}
                 className="w-full h-full object-cover"
               />
             ) : (
-              <span className="text-slate-950 font-black text-xs tracking-wide">
-                {tool.name.slice(0, 2).toUpperCase()}
-              </span>
+              <svg viewBox="0 0 40 40" aria-label={`${tool.name} initial avatar`} className="h-full w-full">
+                <rect width="40" height="40" rx="20" fill="#d1fae5" />
+                <text x="20" y="25" textAnchor="middle" fontSize="16" fontWeight="700" fill="#047857">{tool.name.slice(0, 1).toUpperCase()}</text>
+              </svg>
             )}
           </div>
 
@@ -130,7 +144,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="text-base font-bold text-slate-900 group-hover:text-amber-600 transition-colors truncate block"
+              className="text-base text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer transition-colors truncate block"
               title={`Visit ${tool.website_url}`}
             >
               {tool.name}
@@ -164,7 +178,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
       {/* Right Action: Bookmark / Favorite (Top Corner) */}
       <button
         type="button"
-        onClick={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
         title={tool.is_favorite ? "Remove from favorites" : "Add to favorites"}
         aria-label={tool.is_favorite ? "Remove from favorites" : "Add to favorites"}
         className="shrink-0 ml-auto mt-0.5"

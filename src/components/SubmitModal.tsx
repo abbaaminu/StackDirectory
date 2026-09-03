@@ -130,7 +130,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
 
@@ -189,7 +189,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       tagline: formData.tagline.trim(),
       description: formData.description.trim() || formData.tagline.trim(),
       website_url: normalizedUrl,
-      icon_url: formData.icon_url || `https://www.google.com/s2/favicons?domain=${getUrlDetails(normalizedUrl)?.domain || normalizedUrl}&sz=128`,
+      icon_url: formData.icon_url || `https://icon.horse/icon/${getUrlDetails(normalizedUrl)?.domain || ""}`,
       category:
         formData.category === "All" ? "Developer Tools" : formData.category,
       pricing_type: formData.pricing_type,
@@ -222,7 +222,15 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       setIsProcessingCheckout(true);
       const paddle = window.Paddle;
       const priceId = import.meta.env.VITE_PADDLE_FEATURED_PRICE_ID;
-      if (paddle && priceId) {
+      if (!paddle || !priceId) {
+        setIsProcessingCheckout(false);
+        await onSubmitTool(baseTool, true);
+        window.alert("Paddle checkout is not configured yet. Your listing was saved for review as a pending submission.");
+        onClose();
+        return;
+      }
+
+      try {
         paddle.Checkout.open({
           items: [{ priceId, quantity: 1 }],
           customer: formData.customer_email ? { email: formData.customer_email } : undefined,
@@ -231,18 +239,14 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         });
         setIsProcessingCheckout(false);
         setShowCheckoutSuccess(true);
-        onSubmitTool(baseTool, true);
-        return;
-      }
-      window.setTimeout(() => {
+        await onSubmitTool(baseTool, true);
+      } catch (error) {
+        console.error("Paddle checkout failed:", error);
         setIsProcessingCheckout(false);
-        setShowCheckoutSuccess(true);
-        onSubmitTool(baseTool, true);
-        window.setTimeout(() => {
-          setShowCheckoutSuccess(false);
-          onClose();
-        }, 900);
-      }, 400);
+        await onSubmitTool(baseTool, true);
+        window.alert("Paddle checkout could not be opened. Your listing was saved for review as a pending submission.");
+        onClose();
+      }
     } else {
       // Free Submission -> Queue for review
       onSubmitTool(baseTool, false);
