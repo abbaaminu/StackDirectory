@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   X,
   Sparkles,
@@ -53,6 +53,8 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
   const [autoFillMessage, setAutoFillMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
+  const [paymentUnavailable, setPaymentUnavailable] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const getUrlDetails = (value: string) => {
     try {
@@ -137,6 +139,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     if (isSubmitting) return;
     setIsSubmitting(true);
     setErrorMsg("");
+    setPaymentUnavailable(false);
 
     if (
       !formData.name.trim() ||
@@ -227,7 +230,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     };
 
     const handleDirectSubmit = async () => {
-      await onSubmitTool(baseTool, true);
+      await onSubmitTool(baseTool, false);
       setSubmissionSuccess(true);
       setIsSubmitting(false);
       window.setTimeout(() => {
@@ -247,14 +250,31 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     if (formData.tier === "paddle_featured") {
       setIsProcessingCheckout(true);
       const paddle = window.Paddle;
-      const priceId = import.meta.env.VITE_PADDLE_FEATURED_PRICE_ID;
+      const token = import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
+      const priceId = import.meta.env.VITE_PADDLE_PRICE_ID;
       if (!paddle || !priceId) {
         setIsProcessingCheckout(false);
-        await handleDirectSubmit();
+        setPaymentUnavailable(true);
+        setIsSubmitting(false);
         return;
       }
 
       try {
+        if (!token) {
+          setPaymentUnavailable(true);
+          setIsProcessingCheckout(false);
+          setIsSubmitting(false);
+          return;
+        }
+        paddle.Initialize({
+          token,
+          eventCallback: (event) => {
+            if (event.event_type === "checkout.closed") {
+              setIsProcessingCheckout(false);
+              setIsSubmitting(false);
+            }
+          },
+        });
         paddle.Checkout.open({
           items: [{ priceId, quantity: 1 }],
           customer: formData.customer_email ? { email: formData.customer_email } : undefined,
@@ -268,7 +288,8 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       } catch (error) {
         console.error("Paddle checkout failed:", error);
         setIsProcessingCheckout(false);
-        await handleDirectSubmit();
+        setPaymentUnavailable(true);
+        setIsSubmitting(false);
       }
     } else {
       // Free Submission -> Queue for review
@@ -326,7 +347,24 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        {paymentUnavailable && (
+          <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <p>Payment gateway is currently in test mode or unconfigured. Please contact support or submit as free.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setFormData((current) => ({ ...current, tier: "free" }));
+                setPaymentUnavailable(false);
+                window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+              }}
+              className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-500"
+            >
+              Submit as Free Listing
+            </button>
+          </div>
+        )}
+
+        <form ref={formRef} onSubmit={handleSubmit} className="mt-6 space-y-4">
           {/* Plan Tier Selection */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             {/* Free Tier Card (100% Free) */}
@@ -725,7 +763,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 {isSubmitting || isProcessingCheckout ? (
                   <>
                     <span className="h-3.5 w-3.5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
-                    <span>Opening Paddle Checkout ($29/mo)...</span>
+                    <span>Opening Payment...</span>
                   </>
                 ) : showCheckoutSuccess ? (
                   <>
