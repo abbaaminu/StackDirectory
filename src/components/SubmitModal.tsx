@@ -54,6 +54,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
   const [paymentUnavailable, setPaymentUnavailable] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   const getUrlDetails = (value: string) => {
@@ -140,14 +141,16 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     setIsSubmitting(true);
     setErrorMsg("");
     setPaymentUnavailable(false);
+    setPaymentError(null);
 
     if (
       !formData.name.trim() ||
       !formData.tagline.trim() ||
-      !formData.website_url.trim()
+      !formData.website_url.trim() ||
+      !formData.category.trim()
     ) {
       setErrorMsg(
-        "Please fill in all required fields (Name, Tagline, and Website URL).",
+        "Please fill in all required fields (App Name, Tagline, Website URL, and Category).",
       );
       setIsSubmitting(false);
       return;
@@ -230,9 +233,18 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     };
 
     const handleDirectSubmit = async () => {
-      await onSubmitTool(baseTool, false);
-      setSubmissionSuccess(true);
-      setIsSubmitting(false);
+      let submitted = false;
+      try {
+        await onSubmitTool(baseTool, false);
+        setSubmissionSuccess(true);
+        submitted = true;
+      } catch (error) {
+        console.error("Direct submission failed:", error);
+        setErrorMsg("We could not submit your app for review. Please try again.");
+      } finally {
+        setIsSubmitting(false);
+      }
+      if (!submitted) return;
       window.setTimeout(() => {
         setSubmissionSuccess(false);
         setFormData({
@@ -252,20 +264,21 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       const paddle = window.Paddle;
       const token = import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
       const priceId = import.meta.env.VITE_PADDLE_PRICE_ID;
-      if (!paddle || !priceId) {
+      if (!paddle || !token || !priceId) {
         setIsProcessingCheckout(false);
+        const diagnostic = !paddle
+          ? "Error: Paddle SDK not loaded on window"
+          : !token
+            ? "Error: VITE_PADDLE_CLIENT_TOKEN is missing"
+            : "Error: VITE_PADDLE_PRICE_ID is missing";
+        setPaymentError(diagnostic);
+        setErrorMsg("Paddle keys missing in environment variables. Submitting directly for review.");
         setPaymentUnavailable(true);
-        setIsSubmitting(false);
+        await handleDirectSubmit();
         return;
       }
 
       try {
-        if (!token) {
-          setPaymentUnavailable(true);
-          setIsProcessingCheckout(false);
-          setIsSubmitting(false);
-          return;
-        }
         paddle.Initialize({
           token,
           eventCallback: (event) => {
@@ -287,8 +300,13 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         setIsSubmitting(false);
       } catch (error) {
         console.error("Paddle checkout failed:", error);
+        setPaymentError(error instanceof Error ? error.message : String(error));
         setIsProcessingCheckout(false);
+        setErrorMsg("Payment could not be opened. Submitting directly for review.");
         setPaymentUnavailable(true);
+        await handleDirectSubmit();
+      } finally {
+        setIsProcessingCheckout(false);
         setIsSubmitting(false);
       }
     } else {
@@ -755,28 +773,35 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
             </button>
 
             {formData.tier === "paddle_featured" ? (
-              <button
-                type="submit"
-                disabled={isSubmitting || isProcessingCheckout || showCheckoutSuccess}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold text-zinc-950 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-lg shadow-amber-500/20 active:scale-95 transition disabled:opacity-50"
-              >
-                {isSubmitting || isProcessingCheckout ? (
-                  <>
-                    <span className="h-3.5 w-3.5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
-                    <span>Opening Payment...</span>
-                  </>
-                ) : showCheckoutSuccess ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-zinc-950" />
-                    <span>Payment Verified! Launching...</span>
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="w-3.5 h-3.5" />
-                    <span>Pay $29/mo with Paddle</span>
-                  </>
+              <div className="flex flex-col items-end gap-2">
+                {paymentError && (
+                  <div className="w-full rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+                    {paymentError}
+                  </div>
                 )}
-              </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || isProcessingCheckout || showCheckoutSuccess}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold text-zinc-950 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-lg shadow-amber-500/20 active:scale-95 transition disabled:opacity-50"
+                >
+                  {isSubmitting || isProcessingCheckout ? (
+                    <>
+                      <span className="h-3.5 w-3.5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
+                      <span>Opening Payment...</span>
+                    </>
+                  ) : showCheckoutSuccess ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-zinc-950" />
+                      <span>Payment Verified! Launching...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-3.5 h-3.5" />
+                      <span>Pay $29/mo with Paddle</span>
+                    </>
+                  )}
+                </button>
+              </div>
             ) : (
               <button
                 type="submit"
