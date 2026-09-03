@@ -3,26 +3,23 @@ import {
   Search,
   Sparkles,
   Zap,
-  ArrowUpDown,
-  Filter,
   X,
   ShoppingBag,
-  DollarSign,
+  LayoutGrid,
 } from "lucide-react";
-import { CATEGORIES } from "../data/mockTools";
-import { PricingType } from "../types/directory";
+import type { PricingFilter } from "../types/directory";
+import { PRICING_FILTER_OPTIONS } from "../types/directory";
 
-interface HeroProps {
+export type ViewMode = "all" | "for_sale";
+
+export interface HeroProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  selectedCategory: string;
-  onCategoryChange: (category: string) => void;
-  selectedPricing: string;
-  onPricingChange: (pricing: string) => void;
-  sortBy: "featured" | "upvotes" | "newest" | "for_sale";
-  onSortChange: (sort: "featured" | "upvotes" | "newest" | "for_sale") => void;
+  selectedPricing: PricingFilter;
+  onPricingChange: (pricing: PricingFilter) => void;
+  selectedTab: ViewMode;
+  onTabChange: (tab: ViewMode) => void;
   totalApproved: number;
-  featuredCount: number;
   forSaleCount: number;
   onOpenSubmit: () => void;
 }
@@ -30,14 +27,11 @@ interface HeroProps {
 export const Hero: React.FC<HeroProps> = ({
   searchQuery,
   onSearchChange,
-  selectedCategory,
-  onCategoryChange,
   selectedPricing,
   onPricingChange,
-  sortBy,
-  onSortChange,
+  selectedTab,
+  onTabChange,
   totalApproved,
-  featuredCount,
   forSaleCount,
   onOpenSubmit,
 }) => {
@@ -97,9 +91,9 @@ export const Hero: React.FC<HeroProps> = ({
         </div>
       </div>
 
-      {/* Instant Search and Filters Bar */}
-      <div className="relative z-10 mt-10 max-w-4xl mx-auto space-y-4">
-        {/* Search Input Box */}
+      {/* Real-Time Search + Filtering */}
+      <div className="relative z-10 mt-10 max-w-5xl mx-auto space-y-5">
+        {/* Search with clear (X) button */}
         <div className="relative flex items-center max-w-2xl mx-auto">
           <Search className="absolute left-4 w-5 h-5 text-slate-400 pointer-events-none" />
           <input
@@ -107,87 +101,76 @@ export const Hero: React.FC<HeroProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search startups for sale, MRR, tech stacks, or desktop utilities..."
-            className="w-full pl-12 pr-10 py-3 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white text-slate-900 placeholder-slate-400 shadow-inner text-sm md:text-base outline-none transition"
+            placeholder="Search by name, tagline, category, or tech stack..."
+            className="w-full pl-12 pr-11 py-3 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 text-slate-900 placeholder-slate-400 shadow-inner text-sm md:text-base outline-none transition"
           />
           {searchQuery && (
             <button
+              type="button"
+              aria-label="Clear search"
               onClick={() => onSearchChange("")}
-              className="absolute right-4 text-slate-400 hover:text-slate-900 p-1"
+              className="absolute right-3 p-1 rounded-md text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition"
             >
               <X className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Filter Controls Row */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
-          {/* Category Pills including 🏷️ Startups For Sale */}
-          <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-            {CATEGORIES.map((cat) => {
-              const isActive = selectedCategory === cat;
-              const isMarketplace = cat === "Startups For Sale";
-
-              return (
-                <button
-                  key={cat}
-                  id={`cat-pill-${cat.toLowerCase().replace(/\s+/g, "-")}`}
-                  onClick={() => onCategoryChange(cat)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap flex items-center gap-1.5 ${
-                    isActive
-                      ? isMarketplace
-                        ? "bg-slate-900 text-white font-bold shadow-sm ring-1 ring-slate-900"
-                        : "bg-slate-900 text-white font-medium shadow-sm"
-                      : isMarketplace
-                        ? "bg-white text-amber-700 border border-amber-200 hover:bg-amber-50 font-semibold"
-                        : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  {isMarketplace && <span>🏷️</span>}
-                  <span>{cat}</span>
-                  {isMarketplace && (
-                    <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${isActive ? "bg-slate-900 text-amber-400" : "bg-amber-100 text-amber-700"}`}
-                    >
-                      {forSaleCount}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+        {/* Second row: All Apps / For Sale tabs + Pricing buttons */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-1">
+          {/* Tab Toggle: All Apps vs For Sale */}
+          <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-1 gap-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => onTabChange("all")}
+              className={[
+                "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition",
+                selectedTab === "all"
+                  ? "bg-slate-900 text-white shadow-sm"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
+              ].join(" ")}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              All Apps
+            </button>
+            <button
+              type="button"
+              onClick={() => onTabChange("for_sale")}
+              className={[
+                "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition",
+                selectedTab === "for_sale"
+                  ? "bg-slate-900 text-white shadow-sm"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
+              ].join(" ")}
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              For Sale (Acquire Mode)
+              <span className="w-5 h-5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold grid place-items-center">
+                {forSaleCount}
+              </span>
+            </button>
           </div>
 
-          {/* Pricing & Sort Dropdowns */}
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            {/* Pricing Filter */}
-            <div className="relative">
-              <select
-                id="select-pricing-filter"
-                value={selectedPricing}
-                onChange={(e) => onPricingChange(e.target.value)}
-                className="bg-white text-xs text-slate-700 font-medium px-3 py-1.5 rounded-lg border border-slate-300 hover:border-slate-400 outline-none cursor-pointer focus:ring-2 focus:ring-amber-500/20"
-              >
-                <option value="All">All Pricing</option>
-                <option value="Free">Free</option>
-                <option value="Freemium">Freemium</option>
-                <option value="Paid">Paid</option>
-                <option value="Open Source">Open Source</option>
-              </select>
-            </div>
-
-            {/* Sort Filter */}
-            <div className="relative">
-              <select
-                id="select-sort-filter"
-                value={sortBy}
-                onChange={(e) => onSortChange(e.target.value as any)}
-                className="bg-white text-xs text-slate-700 font-medium px-3 py-1.5 rounded-lg border border-slate-300 hover:border-slate-400 outline-none cursor-pointer focus:ring-2 focus:ring-amber-500/20"
-              >
-                <option value="featured">Featured First</option>
-                <option value="for_sale">🏷️ For Sale First</option>
-                <option value="upvotes">Most Upvoted</option>
-                <option value="newest">Newest Added</option>
-              </select>
+          {/* Pricing toggle buttons */}
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
+            <div className="flex items-center gap-1.5">
+              {PRICING_FILTER_OPTIONS.map((pricing) => (
+                <button
+                  key={pricing}
+                  type="button"
+                  id={`pricing-btn-${pricing.toLowerCase().replace(/\s+/g, "-")}`}
+                  onClick={() => onPricingChange(pricing)}
+                  className={[
+                    "px-3 py-1.5 rounded-lg text-xs font-medium border transition whitespace-nowrap",
+                    selectedPricing === pricing
+                      ? "bg-slate-900 text-white border-transparent shadow-sm"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100",
+                  ].join(" ")}
+                >
+                  {pricing}
+                </button>
+              ))}
             </div>
           </div>
         </div>

@@ -1,5 +1,15 @@
 export type PricingType = "Free" | "Freemium" | "Paid" | "Open Source";
 
+/** UI-visible pricing filters (All, Free, Freemium, Paid only). */
+export type PricingFilter = "All" | Exclude<PricingType, "Open Source">;
+
+export const PRICING_FILTER_OPTIONS: ReadonlyArray<PricingFilter> = [
+  "All",
+  "Free",
+  "Freemium",
+  "Paid",
+];
+
 export interface Tool {
   id: string;
   name: string;
@@ -12,6 +22,7 @@ export interface Tool {
   upvotes: number;
   is_approved: boolean;
   is_featured: boolean;
+  status?: "pending" | "approved" | "rejected";
   paddle_customer_id?: string | null;
   created_at: string;
   user_has_upvoted?: boolean;

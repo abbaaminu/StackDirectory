@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import supabase from "../lib/supabase";
+import supabase, { isSupabaseConfigured } from "../lib/supabase";
+import { INITIAL_TOOLS } from "../data/mockTools";
 import type { Tool } from "../types/directory";
 import { ToolCardSkeleton } from "../components/ToolCard";
 
@@ -27,6 +28,12 @@ export default function HomePage() {
     const fetchApprovedTools = async () => {
       try {
         setLoading(true);
+
+        if (!isSupabaseConfigured || !supabase) {
+          setTools(INITIAL_TOOLS);
+          setError(null);
+          return;
+        }
 
         const { data, error } = await supabase
           .from("tools")

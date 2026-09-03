@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, X, CheckCircle2, ShoppingBag, LayoutGrid } from "lucide-react";
-import supabase from "./lib/supabase";
+import supabase, { isSupabaseConfigured } from "./lib/supabase";
+import type { Session } from "@supabase/supabase-js";
 import type { Tool, PricingType } from "./types/directory";
+import { INITIAL_TOOLS } from "./data/mockTools";
 import { Header } from "./components/Header";
 import { ToolCard, ToolCardSkeleton } from "./components/ToolCard";
 import { SubmitModal } from "./components/SubmitModal";
 import { AcquisitionModal } from "./components/AcquisitionModal";
 import { AuthModal } from "./components/AuthModal";
+import { AdminQueueModal } from "./components/AdminQueueModal";
 
 const PRICING_FILTERS: ReadonlyArray<"All" | PricingType> = [
   "All",
@@ -18,11 +21,13 @@ const PRICING_FILTERS: ReadonlyArray<"All" | PricingType> = [
 type ViewMode = "all" | "for_sale";
 
 const VOTED_TOOLS_KEY = "voted_tools";
+const LOCAL_TOOLS_KEY = "stackdirectory_tools";
 
 const getVotedTools = (): string[] => {
   try {
     const raw = localStorage.getItem(VOTED_TOOLS_KEY);
-    return raw ? (JSON.parse(raw) as string[]) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
   } catch {
     return [];
   }
@@ -38,6 +43,10 @@ const saveVotedTools = (ids: string[]) => {
 
 export default function App() {
   const [tools, setTools] = useState<Tool[]>([]);
+  const [session, setSession] = useState<Session | null>(null);
+  const [localAuthenticated, setLocalAuthenticated] = useState(false);
+  const [adminTools, setAdminTools] = useState<Tool[]>([]);
+  const [isAdminQueueOpen, setIsAdminQueueOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,6 +74,21 @@ export default function App() {
   const fetchApprovedTools = useCallback(async () => {
     try {
       setLoading(true);
+      if (!isSupabaseConfigured || !supabase) {
+        let stored: Tool[] = [];
+        try {
+          const parsed = JSON.parse(localStorage.getItem(LOCAL_TOOLS_KEY) || "[]");
+          stored = Array.isArray(parsed) ? parsed : [];
+        } catch {
+          stored = [];
+        }
+        setTools([...INITIAL_TOOLS, ...stored].map((tool) => ({
+          ...tool,
+          user_has_upvoted: getVotedTools().includes(tool.id),
+        })));
+        setError(null);
+        return;
+      }
       const { data, error } = await supabase
         .from("tools")
         .select("*")
@@ -78,7 +102,7 @@ export default function App() {
       }
 
       setTools(
-        (data as Tool[]).map((tool) => ({
+        ((data as Tool[]) ?? []).map((tool) => ({
           ...tool,
           // Restore persistent upvote state across page reloads
           user_has_upvoted: getVotedTools().includes(tool.id),
@@ -96,9 +120,65 @@ export default function App() {
     fetchApprovedTools();
   }, [fetchApprovedTools]);
 
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+    void supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      if (nextSession) showToast("Authentication state updated.");
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+
   const showToast = (message: string) => {
     setToastMessage(message);
     setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const isAdmin = Boolean(
+    session?.user.app_metadata?.role === "admin" ||
+      (session?.user.email &&
+        (import.meta.env.VITE_ADMIN_EMAILS ?? "")
+          .split(",")
+          .map((email: string) => email.trim().toLowerCase())
+          .includes(session.user.email.toLowerCase())),
+  );
+
+  const openAdminQueue = async () => {
+    if (!isAdmin) {
+      showToast("Admin access is restricted to authorized accounts.");
+      return;
+    }
+    if (!isSupabaseConfigured || !supabase) {
+      const stored = JSON.parse(localStorage.getItem(LOCAL_TOOLS_KEY) || "[]") as Tool[];
+      setAdminTools(stored);
+    } else {
+      const { data, error } = await supabase.from("tools").select("*").order("created_at", { ascending: false });
+      if (error) {
+        showToast("Could not load the review queue.");
+        return;
+      }
+      setAdminTools((data as Tool[]) ?? []);
+    }
+    setIsAdminQueueOpen(true);
+  };
+
+  const updateAdminTool = async (toolId: string, updates: Partial<Tool>) => {
+    if (!isSupabaseConfigured || !supabase) {
+      const stored = JSON.parse(localStorage.getItem(LOCAL_TOOLS_KEY) || "[]") as Tool[];
+      const next = stored.map((tool) => tool.id === toolId ? { ...tool, ...updates } : tool);
+      localStorage.setItem(LOCAL_TOOLS_KEY, JSON.stringify(next));
+      setAdminTools(next);
+      await fetchApprovedTools();
+      return;
+    }
+    const { error } = await supabase.from("tools").update(updates as never).eq("id", toolId);
+    if (error) {
+      showToast("Could not update this listing.");
+      return;
+    }
+    setAdminTools((current) => current.map((tool) => tool.id === toolId ? { ...tool, ...updates } : tool));
+    await fetchApprovedTools();
   };
 
   // Submit a new tool into Supabase (goes to review queue with is_approved = false)
@@ -113,6 +193,7 @@ export default function App() {
       upvotes: newTool.upvotes ?? 0,
       is_approved: newTool.is_approved ?? false,
       is_featured: newTool.is_featured ?? false,
+      status: "pending" as const,
       paddle_customer_id: newTool.paddle_customer_id ?? null,
       is_for_sale: newTool.is_for_sale ?? false,
       asking_price: newTool.asking_price ?? null,
@@ -122,9 +203,18 @@ export default function App() {
       tech_stack: newTool.tech_stack ?? [],
     };
 
-    const { error } = await supabase
-      .from("tools")
-      .insert(row as unknown as never[]);
+    if (!isSupabaseConfigured || !supabase) {
+      const existing = JSON.parse(localStorage.getItem(LOCAL_TOOLS_KEY) || "[]") as Tool[];
+      localStorage.setItem(LOCAL_TOOLS_KEY, JSON.stringify([
+        ...existing,
+        { ...newTool, is_approved: false, status: "pending" },
+      ]));
+      showToast(`📋 "${newTool.name}" saved locally for review.`);
+      await fetchApprovedTools();
+      return;
+    }
+
+    const { error } = await supabase.from("tools").insert(row as never);
 
     if (error) {
       console.error("Failed to submit tool:", error.message);
@@ -143,14 +233,28 @@ export default function App() {
     const tool = tools.find((t) => t.id === toolId);
     if (!tool) return;
 
-    const nextUpvotes = tool.user_has_upvoted
-      ? Math.max(0, tool.upvotes - 1)
-      : tool.upvotes + 1;
+    const userId = session?.user.id || (localAuthenticated ? "local-demo-user" : null);
+    if (!userId) {
+      setAuthMode("login");
+      setIsAuthOpen(true);
+      showToast("Please sign in to upvote a tool.");
+      return;
+    }
 
-    const { error } = await supabase
-      .from("tools")
-      .update({ upvotes: nextUpvotes } as never)
-      .eq("id", toolId);
+    if (!isSupabaseConfigured || !supabase) {
+      const nextUpvotes = tool.user_has_upvoted ? Math.max(0, tool.upvotes - 1) : tool.upvotes + 1;
+      const votedTools = getVotedTools();
+      const isUpvoting = !tool.user_has_upvoted;
+      saveVotedTools(isUpvoting ? [...new Set([...votedTools, toolId])] : votedTools.filter((id) => id !== toolId));
+      setTools((prev) => prev.map((item) => item.id === toolId ? { ...item, upvotes: nextUpvotes, user_has_upvoted: isUpvoting } : item));
+      showToast(isUpvoting ? "Upvote added." : "Upvote removed.");
+      return;
+    }
+
+    const { data, error } = await supabase.rpc("toggle_tool_upvote", {
+      target_tool_id: toolId,
+      voter_id: userId,
+    } as never);
 
     if (error) {
       console.error("Failed to update upvotes:", error.message);
@@ -158,26 +262,23 @@ export default function App() {
       return;
     }
 
-    // Persist upvote state so it survives page reloads
+    const result = data as { voted: boolean; upvotes: number } | null;
     const votedTools = getVotedTools();
-    const isUpvoting = !tool.user_has_upvoted;
-    if (isUpvoting && !votedTools.includes(toolId)) {
-      saveVotedTools([...votedTools, toolId]);
-    } else if (!isUpvoting) {
-      saveVotedTools(votedTools.filter((id) => id !== toolId));
-    }
+    if (result?.voted) saveVotedTools([...new Set([...votedTools, toolId])]);
+    else saveVotedTools(votedTools.filter((id) => id !== toolId));
 
     setTools((prev) =>
       prev.map((t) =>
         t.id === toolId
           ? {
               ...t,
-              upvotes: nextUpvotes,
-              user_has_upvoted: !t.user_has_upvoted,
+              upvotes: result?.upvotes ?? t.upvotes,
+              user_has_upvoted: result?.voted ?? t.user_has_upvoted,
             }
           : t,
       ),
     );
+    showToast(result?.voted ? "Upvote added." : "Upvote removed.");
   };
 
   // Filter approved tools by view mode, search query and pricing filter
@@ -224,6 +325,7 @@ export default function App() {
           setAuthMode(mode);
           setIsAuthOpen(true);
         }}
+        onOpenAdmin={openAdminQueue}
       />
 
       {/* Toast Notification */}
@@ -391,6 +493,24 @@ export default function App() {
         isOpen={isAuthOpen}
         initialMode={authMode}
         onClose={() => setIsAuthOpen(false)}
+        onAuthenticated={() => setLocalAuthenticated(true)}
+        onToast={showToast}
+      />
+
+      <AdminQueueModal
+        isOpen={isAdminQueueOpen}
+        onClose={() => setIsAdminQueueOpen(false)}
+        tools={adminTools}
+        onApproveTool={(toolId) => void updateAdminTool(toolId, { is_approved: true, status: "approved" })}
+        onRejectTool={(toolId) => void updateAdminTool(toolId, { is_approved: false, status: "rejected" })}
+        onToggleFeature={(toolId) => {
+          const tool = adminTools.find((item) => item.id === toolId);
+          if (tool) void updateAdminTool(toolId, { is_featured: !tool.is_featured });
+        }}
+        onToggleForSale={(toolId) => {
+          const tool = adminTools.find((item) => item.id === toolId);
+          if (tool) void updateAdminTool(toolId, { is_for_sale: !tool.is_for_sale });
+        }}
       />
     </div>
   );

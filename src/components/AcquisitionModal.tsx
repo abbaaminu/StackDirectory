@@ -12,7 +12,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { Tool } from "../types/directory";
-import supabase from "../lib/supabase";
+import supabase, { isSupabaseConfigured } from "../lib/supabase";
 
 interface AcquisitionModalProps {
   isOpen: boolean;
@@ -59,22 +59,28 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.from("acquisition_offers").insert({
-        tool_id: tool.id,
-        buyer_name: buyerName.trim(),
-        buyer_email: buyerEmail.trim(),
-        offer_amount: amount,
-        message: message.trim() || null,
-        status: "pending",
-      } as never);
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.from("acquisition_offers").insert({
+          tool_id: tool.id,
+          buyer_name: buyerName.trim(),
+          buyer_email: buyerEmail.trim(),
+          offer_amount: amount,
+          message: message.trim() || null,
+          status: "pending",
+        } as never);
 
-      if (error) {
-        console.error("[Acquisition] Failed to insert offer:", error.message);
-        setErrorMsg(
-          "Could not submit your offer. Please try again in a moment.",
-        );
-        setIsSubmitting(false);
-        return;
+        if (error) {
+          console.error("[Acquisition] Failed to insert offer:", error.message);
+          setErrorMsg("Could not submit your offer. Please try again in a moment.");
+          setIsSubmitting(false);
+          return;
+        }
+      } else {
+        const existing = JSON.parse(localStorage.getItem("stackdirectory_offers") || "[]") as unknown[];
+        localStorage.setItem("stackdirectory_offers", JSON.stringify([
+          ...existing,
+          { tool_id: tool.id, buyer_name: buyerName.trim(), buyer_email: buyerEmail.trim(), offer_amount: amount, message: message.trim(), status: "pending", created_at: new Date().toISOString() },
+        ]));
       }
 
       setIsSubmitting(false);

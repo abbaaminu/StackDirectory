@@ -48,6 +48,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
   const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
   const [showCheckoutSuccess, setShowCheckoutSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
   if (!isOpen) return null;
 
@@ -81,6 +82,11 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       }
     }
 
+    if (step < 3) {
+      setStep((currentStep) => (currentStep + 1) as 2 | 3);
+      return;
+    }
+
     let normalizedUrl = formData.website_url.trim();
     if (
       !normalizedUrl.startsWith("http://") &&
@@ -109,12 +115,9 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         formData.category === "All" ? "Developer Tools" : formData.category,
       pricing_type: formData.pricing_type,
       upvotes: formData.tier === "paddle_featured" ? 1 : 0,
-      is_approved: formData.tier === "paddle_featured", // Instant approval with Paddle
-      is_featured: formData.tier === "paddle_featured", // Instant boost with Paddle
-      paddle_customer_id:
-        formData.tier === "paddle_featured"
-          ? `ctm_pdl_${Math.random().toString(36).substring(2, 9)}`
-          : null,
+      is_approved: false,
+      is_featured: false,
+      paddle_customer_id: null,
       created_at: new Date().toISOString(),
       user_has_upvoted: formData.tier === "paddle_featured",
 
@@ -136,18 +139,30 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     };
 
     if (formData.tier === "paddle_featured") {
-      // Simulate Paddle Checkout flow ($19 USD)
       setIsProcessingCheckout(true);
-      setTimeout(() => {
+      const paddle = window.Paddle;
+      const priceId = import.meta.env.VITE_PADDLE_FEATURED_PRICE_ID;
+      if (paddle && priceId) {
+        paddle.Checkout.open({
+          items: [{ priceId, quantity: 1 }],
+          customer: formData.customer_email ? { email: formData.customer_email } : undefined,
+          customData: { tool_id: baseTool.id, plan_type: "featured_monthly" },
+          settings: { displayMode: "overlay" },
+        });
         setIsProcessingCheckout(false);
         setShowCheckoutSuccess(true);
-
-        setTimeout(() => {
-          onSubmitTool(baseTool, true);
+        onSubmitTool(baseTool, true);
+        return;
+      }
+      window.setTimeout(() => {
+        setIsProcessingCheckout(false);
+        setShowCheckoutSuccess(true);
+        onSubmitTool(baseTool, true);
+        window.setTimeout(() => {
           setShowCheckoutSuccess(false);
           onClose();
-        }, 1200);
-      }, 1500);
+        }, 900);
+      }, 400);
     } else {
       // Free Submission -> Queue for review
       onSubmitTool(baseTool, false);
@@ -176,9 +191,17 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
             Submit to StackDirectory
           </h2>
           <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-            Standard directory listings are 100% free. Upgrade to Instant
-            Featured Launch with Paddle ($19 USD flat fee).
+            Standard directory listings are 100% free. Upgrade to Featured
+            Launch with Paddle ($29 USD/month).
           </p>
+        </div>
+
+        <div className="mt-5 grid grid-cols-3 gap-2 text-[11px] font-semibold">
+          {["Tool details", "Listing tier", "Checkout / Submit"].map((label, index) => (
+            <div key={label} className={`border-b-2 pb-2 ${step >= index + 1 ? "border-amber-400 text-amber-300" : "border-zinc-800 text-zinc-500"}`}>
+              <span className="mr-1">{index + 1}.</span>{label}
+            </div>
+          ))}
         </div>
 
         {errorMsg && (
@@ -217,7 +240,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               </p>
             </div>
 
-            {/* Paddle Instant Featured Tier Card ($19 USD) */}
+            {/* Paddle Featured Tier ($29/month) */}
             <div
               onClick={() =>
                 setFormData({ ...formData, tier: "paddle_featured" })
@@ -239,12 +262,12 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                   </span>
                 </div>
                 <span className="text-sm font-black text-amber-400 mr-12">
-                  $19 USD
+                  $29/mo
                 </span>
               </div>
               <p className="text-[11px] text-zinc-300 mt-2 leading-relaxed">
-                Instant approval, gold badge, top placement, and Paddle webhook
-                upgrade simulation.
+                Priority review, gold badge after payment confirmation, and a
+                Paddle webhook-backed monthly subscription.
               </p>
             </div>
           </div>
@@ -526,10 +549,11 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               {formData.tier === "paddle_featured" && (
                 <div>
                   <label className="block text-xs font-medium text-amber-300 mb-1 flex items-center gap-1">
-                    <Lock className="w-3 h-3" /> Billing Email (Paddle $19)
+                    <Lock className="w-3 h-3" /> Billing Email (Paddle $29/mo)
                   </label>
                   <input
                     type="email"
+                    required
                     value={formData.customer_email}
                     onChange={(e) =>
                       setFormData({
@@ -579,7 +603,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 {isProcessingCheckout ? (
                   <>
                     <span className="h-3.5 w-3.5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
-                    <span>Opening Paddle Checkout ($19)...</span>
+                    <span>Opening Paddle Checkout ($29/mo)...</span>
                   </>
                 ) : showCheckoutSuccess ? (
                   <>
@@ -589,7 +613,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 ) : (
                   <>
                     <CreditCard className="w-3.5 h-3.5" />
-                    <span>Pay $19 USD with Paddle & Launch Instantly</span>
+                    <span>Pay $29/mo with Paddle</span>
                   </>
                 )}
               </button>

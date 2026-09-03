@@ -21,6 +21,7 @@ export interface Database {
           upvotes: number;
           is_approved: boolean;
           is_featured: boolean;
+          status: "pending" | "approved" | "rejected";
           paddle_customer_id: string | null;
           is_for_sale: boolean;
           asking_price: number | null;
@@ -32,10 +33,11 @@ export interface Database {
         };
         Insert: Omit<
           Database["public"]["Tables"]["tools"]["Row"],
-          "id" | "created_at"
+          "id" | "created_at" | "status"
         > & {
           id?: string;
           created_at?: string;
+          status?: "pending" | "approved" | "rejected";
         };
         Update: Partial<Database["public"]["Tables"]["tools"]["Insert"]>;
       };

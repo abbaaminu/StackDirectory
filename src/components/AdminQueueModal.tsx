@@ -17,6 +17,7 @@ interface AdminQueueModalProps {
   onApproveTool: (toolId: string) => void;
   onRejectTool: (toolId: string) => void;
   onToggleFeature: (toolId: string) => void;
+  onToggleForSale: (toolId: string) => void;
 }
 
 export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
@@ -26,6 +27,7 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
   onApproveTool,
   onRejectTool,
   onToggleFeature,
+  onToggleForSale,
 }) => {
   if (!isOpen) return null;
 
@@ -134,6 +136,14 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                     >
                       <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
                       <span>Feature</span>
+                    </button>
+
+                    <button
+                      onClick={() => onToggleForSale(tool.id)}
+                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 transition"
+                      title="Toggle acquisition listing"
+                    >
+                      {tool.is_for_sale ? "Hide Sale" : "For Sale"}
                     </button>
 
                     <button

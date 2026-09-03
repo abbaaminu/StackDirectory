@@ -10,6 +10,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
+import supabase, { isSupabaseConfigured } from "../lib/supabase";
 
 export type AuthMode = "login" | "signup";
 
@@ -17,6 +18,8 @@ interface AuthModalProps {
   isOpen: boolean;
   initialMode: AuthMode;
   onClose: () => void;
+  onAuthenticated?: () => void;
+  onToast?: (message: string) => void;
 }
 
 const CITY_BG =
@@ -26,6 +29,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   initialMode,
   onClose,
+  onAuthenticated,
+  onToast,
 }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -60,7 +65,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -74,14 +79,53 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // NOTE: Real authentication (e.g. Supabase Auth) can be wired in here.
     setSubmitting(true);
-    window.setTimeout(() => {
-      setSubmitting(false);
-      setEmail("");
-      setPassword("");
+    if (!isSupabaseConfigured || !supabase) {
+      window.setTimeout(() => {
+        onAuthenticated?.();
+        onToast?.("Demo account signed in locally.");
+        setSubmitting(false);
+        setEmail("");
+        setPassword("");
+        onClose();
+      }, 300);
+      return;
+    }
+
+    const result = isLogin
+      ? await supabase.auth.signInWithPassword({ email: trimmedEmail, password })
+      : await supabase.auth.signUp({ email: trimmedEmail, password });
+    setSubmitting(false);
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+    onAuthenticated?.();
+    onToast?.(
+      isLogin
+        ? "You are now signed in."
+        : result.data.session
+          ? "Account created and signed in."
+          : "Account created. Check your email to confirm it.",
+    );
+    setEmail("");
+    setPassword("");
+    onClose();
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    if (!isSupabaseConfigured || !supabase) {
+      onAuthenticated?.();
+      onToast?.("Demo account signed in locally.");
       onClose();
-    }, 900);
+      return;
+    }
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+    if (oauthError) setError(oauthError.message);
   };
 
   const tabClasses = (active: boolean) =>
@@ -171,6 +215,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <button
+            type="button"
+            onClick={() => void handleGoogleSignIn()}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 transition"
+          >
+            <span className="font-black text-amber-400">G</span>
+            Continue with Google
+          </button>
+          <div className="flex items-center gap-3 text-[10px] uppercase tracking-wider text-slate-500">
+            <span className="h-px flex-1 bg-slate-700" />
+            <span>or email</span>
+            <span className="h-px flex-1 bg-slate-700" />
+          </div>
           {/* Email */}
           <div>
             <label
