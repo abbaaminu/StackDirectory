@@ -57,6 +57,9 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
+  const priceId = import.meta.env.VITE_PADDLE_PRICE_ID || import.meta.env.VITE_PADDLE_FEATURED_PRICE_ID;
+  const clientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
+
   const getUrlDetails = (value: string) => {
     try {
       const normalized = value.match(/^https?:\/\//i) ? value : `https://${value}`;
@@ -95,6 +98,22 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       }));
     }
   }, [formData.website_url, formData.icon_url]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsSubmitting(false);
+      setIsProcessingCheckout(false);
+      return;
+    }
+    if (window.Paddle && clientToken) {
+      try {
+        window.Paddle.Initialize({ token: clientToken });
+      } catch (error) {
+        console.error("Paddle initialization failed:", error);
+        setPaymentError(error instanceof Error ? error.message : String(error));
+      }
+    }
+  }, [isOpen, clientToken]);
 
   const handleAutoFill = async () => {
     const details = getUrlDetails(formData.website_url);
@@ -138,7 +157,6 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
-    setIsSubmitting(true);
     setErrorMsg("");
     setPaymentUnavailable(false);
     setPaymentError(null);
@@ -260,31 +278,29 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     };
 
     if (formData.tier === "paddle_featured") {
-      setIsProcessingCheckout(true);
       const paddle = window.Paddle;
-      const token = import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
-      const priceId = import.meta.env.VITE_PADDLE_PRICE_ID;
-      if (!paddle || !token || !priceId) {
-        setIsProcessingCheckout(false);
+      if (!paddle || !clientToken || !priceId) {
         const diagnostic = !paddle
           ? "Error: Paddle SDK not loaded on window"
-          : !token
+          : !clientToken
             ? "Error: VITE_PADDLE_CLIENT_TOKEN is missing"
             : "Error: VITE_PADDLE_PRICE_ID is missing";
         setPaymentError(diagnostic);
-        setErrorMsg("Paddle keys missing in environment variables. Submitting directly for review.");
-        setPaymentUnavailable(true);
-        await handleDirectSubmit();
+        setIsSubmitting(false);
         return;
       }
 
+      setIsSubmitting(true);
+      setIsProcessingCheckout(true);
+      let checkoutOpened = false;
       try {
         paddle.Initialize({
-          token,
+          token: clientToken,
           eventCallback: (event) => {
             if (event.event_type === "checkout.closed") {
               setIsProcessingCheckout(false);
               setIsSubmitting(false);
+              setShowCheckoutSuccess(false);
             }
           },
         });
@@ -294,6 +310,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
           customData: { tool_id: baseTool.id, plan_type: "featured_monthly" },
           settings: { displayMode: "overlay" },
         });
+        checkoutOpened = true;
         setIsProcessingCheckout(false);
         setShowCheckoutSuccess(true);
         await onSubmitTool(baseTool, true);
@@ -302,15 +319,14 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         console.error("Paddle checkout failed:", error);
         setPaymentError(error instanceof Error ? error.message : String(error));
         setIsProcessingCheckout(false);
-        setErrorMsg("Payment could not be opened. Submitting directly for review.");
-        setPaymentUnavailable(true);
-        await handleDirectSubmit();
+        setErrorMsg("Payment could not be opened. Please check your Paddle configuration and try again.");
       } finally {
         setIsProcessingCheckout(false);
-        setIsSubmitting(false);
+        if (!checkoutOpened) setIsSubmitting(false);
       }
     } else {
       // Free Submission -> Queue for review
+      setIsSubmitting(true);
       await onSubmitTool(baseTool, false);
       setIsSubmitting(false);
       onClose();
