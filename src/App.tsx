@@ -70,6 +70,7 @@ export default function App() {
 
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const isAuthenticated = Boolean(session || localAuthenticated);
 
   const fetchApprovedTools = useCallback(async () => {
     try {
@@ -179,6 +180,12 @@ export default function App() {
     }
     setAdminTools((current) => current.map((tool) => tool.id === toolId ? { ...tool, ...updates } : tool));
     await fetchApprovedTools();
+  };
+
+  const handleSignOut = async () => {
+    setLocalAuthenticated(false);
+    if (isSupabaseConfigured && supabase) await supabase.auth.signOut();
+    showToast("You have been signed out.");
   };
 
   // Submit a new tool into Supabase (goes to review queue with is_approved = false)
@@ -326,6 +333,9 @@ export default function App() {
           setIsAuthOpen(true);
         }}
         onOpenAdmin={openAdminQueue}
+        isAuthenticated={isAuthenticated}
+        userEmail={session?.user.email ?? (localAuthenticated ? "demo@stackdirectory.local" : undefined)}
+        onSignOut={() => void handleSignOut()}
       />
 
       {/* Toast Notification */}
@@ -344,7 +354,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="relative z-10 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {isAuthenticated ? <main className="relative z-10 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-3xl font-bold">StackDirectory</h1>
@@ -472,21 +482,59 @@ export default function App() {
             </button>
           </div>
         )}
-      </main>
+      </main> : (
+        <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-20">
+          <section className="max-w-4xl mx-auto text-center">
+            <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-amber-800">
+              Built for builders and buyers
+            </span>
+            <h1 className="mt-6 text-4xl sm:text-6xl font-black tracking-tight text-slate-950">
+              The #1 Directory &amp; Marketplace for Developer Tools &amp; Micro-SaaS
+            </h1>
+            <p className="mt-6 mx-auto max-w-2xl text-base sm:text-lg leading-relaxed text-slate-600">
+              Find the tools that make your next product faster, then discover proven micro-SaaS businesses ready for their next chapter. Join a focused community where makers share useful software, earn recognition, and connect with serious buyers.
+            </p>
+            <div className="mt-8 flex flex-col sm:flex-row justify-center gap-3">
+              <button onClick={() => { setAuthMode("signup"); setIsAuthOpen(true); }} className="inline-flex items-center justify-center rounded-xl bg-amber-400 px-6 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-amber-400/20 hover:bg-amber-300 transition">Sign Up Free</button>
+              <button onClick={() => { setAuthMode("login"); setIsAuthOpen(true); }} className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-bold text-slate-800 hover:border-slate-400 hover:bg-slate-50 transition">Log In</button>
+            </div>
+            <div className="mt-10 flex flex-wrap justify-center gap-2">
+              {["Discover", "Upvote", "Acquire"].map((feature) => <span key={feature} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm">{feature}</span>)}
+            </div>
+          </section>
+          <section className="relative mt-16 max-w-4xl mx-auto" aria-label="Featured tools preview">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 opacity-75">
+              {INITIAL_TOOLS.filter((tool) => tool.is_featured).slice(0, 2).map((tool) => (
+                <article key={tool.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm text-left">
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="font-bold text-slate-900 truncate">{tool.name}</h2>
+                    <span className="text-xs font-bold text-amber-700">{tool.upvotes} votes</span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-500 line-clamp-2">{tool.tagline}</p>
+                  <span className="mt-4 inline-block rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">{tool.category}</span>
+                </article>
+              ))}
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-white/45 backdrop-blur-[2px]">
+              <span className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-md">Sign in to unlock full directory &amp; upvoting</span>
+            </div>
+          </section>
+        </main>
+      )}
 
       {/* Submit Tool Modal */}
-      <SubmitModal
+      {isAuthenticated && <SubmitModal
         isOpen={isSubmitModalOpen}
         onClose={() => setIsSubmitModalOpen(false)}
         onSubmitTool={handleSubmitTool}
-      />
+      />}
 
       {/* Acquisition Modal */}
-      <AcquisitionModal
+      {isAuthenticated && <AcquisitionModal
         isOpen={!!selectedAcquisitionTool}
         onClose={() => setSelectedAcquisitionTool(null)}
         tool={selectedAcquisitionTool}
-      />
+      />}
 
       {/* Auth Modal (Log In / Sign Up) */}
       <AuthModal
@@ -497,7 +545,7 @@ export default function App() {
         onToast={showToast}
       />
 
-      <AdminQueueModal
+      {isAuthenticated && <AdminQueueModal
         isOpen={isAdminQueueOpen}
         onClose={() => setIsAdminQueueOpen(false)}
         tools={adminTools}
@@ -511,7 +559,7 @@ export default function App() {
           const tool = adminTools.find((item) => item.id === toolId);
           if (tool) void updateAdminTool(toolId, { is_for_sale: !tool.is_for_sale });
         }}
-      />
+      />}
     </div>
   );
 }

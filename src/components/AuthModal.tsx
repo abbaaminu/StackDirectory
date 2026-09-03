@@ -6,7 +6,6 @@ import {
   Lock,
   LogIn,
   Mail,
-  Sparkles,
   UserPlus,
   X,
 } from "lucide-react";
@@ -21,9 +20,6 @@ interface AuthModalProps {
   onAuthenticated?: () => void;
   onToast?: (message: string) => void;
 }
-
-const CITY_BG =
-  "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1600&q=80";
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
@@ -100,7 +96,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setError(result.error.message);
       return;
     }
-    onAuthenticated?.();
+    if (result.data.session) onAuthenticated?.();
     onToast?.(
       isLogin
         ? "You are now signed in."
@@ -133,12 +129,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       "flex-1 py-2 rounded-lg text-xs font-semibold transition",
       active
         ? "bg-amber-500 text-slate-950 border border-amber-400 shadow-sm"
-        : "text-slate-400 border border-transparent hover:text-white",
+        : "text-slate-500 border border-transparent hover:text-slate-900",
     ].join(" ");
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/30 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label={isLogin ? "Log In" : "Create Account"}
@@ -147,50 +143,37 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* Light clean panel container */}
-      <div className="relative w-full max-w-md rounded-2xl bg-[#0F172A] border border-slate-700 text-white shadow-2xl p-6 animate-slide-up">
+      <div className="relative w-full max-w-md rounded-2xl bg-white border border-slate-200 text-slate-900 shadow-2xl p-6 animate-slide-up">
         {/* Close (X) button */}
         <button
           type="button"
           onClick={onClose}
           aria-label="Close auth modal"
-          className="absolute top-3 right-3 z-20 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-700/50 transition"
+          className="absolute top-3 right-3 z-20 text-slate-400 hover:text-slate-900 p-1.5 rounded-lg hover:bg-slate-100 transition"
         >
           <X className="w-5 h-5" />
         </button>
 
-        {/* Top banner: city high-rise background graphic */}
-        <div className="relative -mx-6 -mt-6 mb-6 h-32 overflow-hidden">
-          <img
-            src={CITY_BG}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover object-center"
-          />
-          <div className="absolute inset-0 bg-linear-to-b from-slate-900/40 via-slate-900/60 to-[#0F172A]" />
-          <div className="relative z-10 h-full flex items-end justify-between p-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-linear-to-tr from-amber-500 via-orange-500 to-amber-300 flex items-center justify-center text-zinc-950 font-black text-lg shadow-lg shadow-amber-500/30">
-                ▲
-              </div>
-              <div>
-                <div className="text-white font-bold tracking-tight">
-                  StackDirectory
-                </div>
-                <div className="text-[11px] text-slate-300 flex items-center gap-1 mt-0.5">
-                  <Sparkles className="w-3 h-3 text-amber-500" />
-                  <span>
-                    {isLogin
-                      ? "Welcome back, log in to continue"
-                      : "Create your free account"}
-                  </span>
-                </div>
+        <div className="mb-6 pr-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-amber-400 flex items-center justify-center text-slate-950 font-black text-lg">
+              ▲
+            </div>
+            <div>
+              <div className="font-bold tracking-tight text-slate-900">StackDirectory</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                {isLogin ? "Welcome back" : "Create your free account"}
               </div>
             </div>
           </div>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-950">
+            {isLogin ? "Log in to continue" : "Join the directory"}
+          </h2>
+          <p className="text-sm text-slate-500 mt-1">Access tools, upvotes, submissions, and acquisition listings.</p>
         </div>
 
         {/* Tab buttons: switch between Log In and Create Account */}
-        <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-700 bg-slate-800/60">
+        <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-200 bg-slate-50">
           <button
             type="button"
 
@@ -218,21 +201,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="button"
             onClick={() => void handleGoogleSignIn()}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 transition"
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 transition"
           >
-            <span className="font-black text-amber-400">G</span>
+            <span className="font-black text-amber-600">G</span>
             Continue with Google
           </button>
           <div className="flex items-center gap-3 text-[10px] uppercase tracking-wider text-slate-500">
-            <span className="h-px flex-1 bg-slate-700" />
+            <span className="h-px flex-1 bg-slate-200" />
             <span>or email</span>
-            <span className="h-px flex-1 bg-slate-700" />
+            <span className="h-px flex-1 bg-slate-200" />
           </div>
           {/* Email */}
           <div>
             <label
               htmlFor="auth-email"
-              className="block text-xs font-medium text-slate-300 mb-1.5"
+              className="block text-xs font-medium text-slate-700 mb-1.5"
             >
               Email address
             </label>
@@ -245,7 +228,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-lg bg-[#1E293B] border border-slate-700 text-white text-sm placeholder-slate-400 focus:border-amber-400 outline-none transition"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 outline-none transition"
               />
             </div>
           </div>
@@ -254,7 +237,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div>
             <label
               htmlFor="auth-password"
-              className="block text-xs font-medium text-slate-300 mb-1.5"
+              className="block text-xs font-medium text-slate-700 mb-1.5"
             >
               Password
             </label>
@@ -267,13 +250,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-10 pr-10 py-2.5 rounded-lg bg-[#1E293B] border border-slate-700 text-white text-sm placeholder-slate-400 focus:border-amber-400 outline-none transition"
+                className="w-full pl-10 pr-10 py-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 outline-none transition"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((s) => !s)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900 transition"
               >
                 {showPassword ? (
                   <EyeOff className="w-4 h-4" />
@@ -285,7 +268,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
 
           {error && (
-            <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+            <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
@@ -294,7 +277,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="submit"
             disabled={submitting}
-            className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-slate-950 bg-amber-500 hover:bg-amber-400 shadow-md transition-all active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none"
+            className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 shadow-md transition-all active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none"
           >
             {submitting ? (
               "Please wait…"
@@ -311,12 +294,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             )}
           </button>
 
-          <p className="text-center text-xs text-slate-400">
+          <p className="text-center text-xs text-slate-500">
             {isLogin ? "Don't have an account? " : "Already have an account? "}
             <button
               type="button"
               onClick={() => setMode(isLogin ? "signup" : "login")}
-              className="inline-flex items-center gap-0.5 font-semibold text-amber-400 hover:text-amber-300 transition"
+              className="inline-flex items-center gap-0.5 font-semibold text-amber-700 hover:text-amber-600 transition"
             >
               {isLogin ? "Create Account" : "Log In"}
               <ArrowRight className="w-3 h-3" />
