@@ -51,6 +51,8 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [autoFillMessage, setAutoFillMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionSuccess, setSubmissionSuccess] = useState(false);
 
   const getUrlDetails = (value: string) => {
     try {
@@ -132,6 +134,8 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     setErrorMsg("");
 
     if (
@@ -142,6 +146,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       setErrorMsg(
         "Please fill in all required fields (Name, Tagline, and Website URL).",
       );
+      setIsSubmitting(false);
       return;
     }
 
@@ -150,18 +155,21 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         setErrorMsg(
           "Please enter a valid Asking Price for your startup listing.",
         );
+        setIsSubmitting(false);
         return;
       }
       if (!formData.seller_contact?.trim()) {
         setErrorMsg(
           "Please provide a seller contact email or link for potential buyers.",
         );
+        setIsSubmitting(false);
         return;
       }
     }
 
     if (step < 3) {
       setStep((currentStep) => (currentStep + 1) as 2 | 3);
+      setIsSubmitting(false);
       return;
     }
 
@@ -225,8 +233,20 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       if (!paddle || !priceId) {
         setIsProcessingCheckout(false);
         await onSubmitTool(baseTool, true);
-        window.alert("Paddle checkout is not configured yet. Your listing was saved for review as a pending submission.");
-        onClose();
+        setSubmissionSuccess(true);
+        setIsSubmitting(false);
+        window.setTimeout(() => {
+          setSubmissionSuccess(false);
+          setFormData({
+            name: "", tagline: "", description: "", website_url: "",
+            category: "Developer Tools", pricing_type: "Freemium", tier: "free",
+            customer_email: "", is_for_sale: false, asking_price: "",
+            monthly_revenue: "", monthly_profit: "", seller_contact: "",
+            tech_stack: "Next.js, Supabase, Tailwind CSS",
+          });
+          setStep(1);
+          onClose();
+        }, 1500);
         return;
       }
 
@@ -240,16 +260,22 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         setIsProcessingCheckout(false);
         setShowCheckoutSuccess(true);
         await onSubmitTool(baseTool, true);
+        setIsSubmitting(false);
       } catch (error) {
         console.error("Paddle checkout failed:", error);
         setIsProcessingCheckout(false);
         await onSubmitTool(baseTool, true);
-        window.alert("Paddle checkout could not be opened. Your listing was saved for review as a pending submission.");
-        onClose();
+        setSubmissionSuccess(true);
+        setIsSubmitting(false);
+        window.setTimeout(() => {
+          setSubmissionSuccess(false);
+          onClose();
+        }, 1500);
       }
     } else {
       // Free Submission -> Queue for review
-      onSubmitTool(baseTool, false);
+      await onSubmitTool(baseTool, false);
+      setIsSubmitting(false);
       onClose();
     }
   };
@@ -292,6 +318,13 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
           <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400 flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 shrink-0" />
             <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {submissionSuccess && (
+          <div className="mt-4 flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            App submitted successfully for review!
           </div>
         )}
 
@@ -688,10 +721,10 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
             {formData.tier === "paddle_featured" ? (
               <button
                 type="submit"
-                disabled={isProcessingCheckout || showCheckoutSuccess}
+                disabled={isSubmitting || isProcessingCheckout || showCheckoutSuccess}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold text-zinc-950 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-lg shadow-amber-500/20 active:scale-95 transition disabled:opacity-50"
               >
-                {isProcessingCheckout ? (
+                {isSubmitting || isProcessingCheckout ? (
                   <>
                     <span className="h-3.5 w-3.5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
                     <span>Opening Paddle Checkout ($29/mo)...</span>
@@ -711,9 +744,10 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
             ) : (
               <button
                 type="submit"
+                disabled={isSubmitting}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 active:scale-95 transition"
               >
-                <span>Submit 100% Free ($0) to Queue</span>
+                {isSubmitting ? <span>Submitting...</span> : <span>Submit 100% Free ($0) to Queue</span>}
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}

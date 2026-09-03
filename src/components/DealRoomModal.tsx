@@ -45,6 +45,7 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
   const [draft, setDraft] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSigning, setIsSigning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -150,7 +151,8 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
 
   const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!conversation || !draft.trim()) return;
+    if (isSubmitting || !conversation || !draft.trim()) return;
+    setIsSubmitting(true);
     const { sanitizedText, hasRedactions } = sanitizeDealMessage(draft.trim());
     setNotice(hasRedactions);
     setDraft("");
@@ -159,11 +161,13 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
       const localMessage: DealMessage = { ...message, id: `message_${Date.now()}`, created_at: new Date().toISOString() };
       localStorage.setItem(LOCAL_MESSAGES, JSON.stringify([...readLocal<DealMessage>(LOCAL_MESSAGES), localMessage]));
       setMessages((current) => [...current, localMessage]);
+      setIsSubmitting(false);
       return;
     }
     const { data, error: messageError } = await supabase.from("deal_messages").insert(message as never).select("*").single();
     if (messageError) setError("Message could not be sent. Please try again.");
     else if (data) setMessages((current) => [...current, data as DealMessage]);
+    setIsSubmitting(false);
   };
 
   return (
@@ -179,7 +183,7 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
         {isLoading ? <div className="p-10 text-center text-sm text-slate-500">Opening secure deal room...</div> : !conversation?.nda_signed ? (
           <div className="p-8 text-center"><LockKeyhole className="mx-auto h-10 w-10 text-amber-600" /><h3 className="mt-4 text-xl font-bold text-slate-950">Standard Non-Disclosure &amp; Anti-Circumvention Agreement</h3><p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-600">Before viewing private acquisition details or messaging the founder, agree to keep confidential information private and communicate through this Deal Room.</p><button type="button" onClick={() => void signNda()} disabled={isSigning} className="mt-6 rounded-xl bg-amber-400 px-5 py-3 text-sm font-bold text-slate-950 hover:bg-amber-300 disabled:opacity-60">{isSigning ? "Recording agreement..." : "I Agree & Sign NDA"}</button></div>
         ) : (
-          <><div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-5 min-h-64">{messages.length === 0 ? <p className="py-10 text-center text-sm text-slate-500">No messages yet. Start the conversation.</p> : messages.map((item) => <div key={item.id} className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${item.sender_id === userId ? "ml-auto bg-emerald-600 text-white" : "bg-white text-slate-700 border border-slate-200"}`}><p>{item.message}</p><time className="mt-1 block text-[10px] opacity-70">{new Date(item.created_at).toLocaleString()}</time></div>)}</div><div className="border-t border-slate-200 p-4">{notice && <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">To protect both parties, external links, phone numbers, and email addresses are automatically masked.</p>}{error && <p className="mb-3 text-xs text-red-600">{error}</p>}<form onSubmit={sendMessage} className="flex gap-2"><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message to the founder..." className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20" /><button type="submit" aria-label="Send message" className="rounded-xl bg-emerald-600 px-4 py-2.5 text-white hover:bg-emerald-500"><Send className="h-4 w-4" /></button></form></div></>
+          <><div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-5 min-h-64">{messages.length === 0 ? <p className="py-10 text-center text-sm text-slate-500">No messages yet. Start the conversation.</p> : messages.map((item) => <div key={item.id} className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${item.sender_id === userId ? "ml-auto bg-emerald-600 text-white" : "bg-white text-slate-700 border border-slate-200"}`}><p>{item.message}</p><time className="mt-1 block text-[10px] opacity-70">{new Date(item.created_at).toLocaleString()}</time></div>)}</div><div className="border-t border-slate-200 p-4">{notice && <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">To protect both parties, external links, phone numbers, and email addresses are automatically masked.</p>}{error && <p className="mb-3 text-xs text-red-600">{error}</p>}<form onSubmit={sendMessage} className="flex gap-2"><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message to the founder..." className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20" /><button type="submit" disabled={isSubmitting} aria-label="Send message" className="rounded-xl bg-emerald-600 px-4 py-2.5 text-white hover:bg-emerald-500 disabled:opacity-60">{isSubmitting ? "Submitting..." : <Send className="h-4 w-4" />}</button></form></div></>
         )}
         {conversation?.nda_signed && <div className="flex items-center gap-2 border-t border-slate-100 px-5 py-2 text-[11px] text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> NDA verified for this conversation</div>}
       </section>
