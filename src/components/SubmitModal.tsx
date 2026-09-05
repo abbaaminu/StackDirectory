@@ -165,45 +165,37 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
     setErrorMsg("");
     setPaymentUnavailable(false);
     setPaymentError(null);
 
-    if (
-      !formData.name.trim() ||
-      !formData.tagline.trim() ||
-      !formData.website_url.trim() ||
-      !formData.category.trim()
-    ) {
+    const nameValid = Boolean(formData.name?.trim());
+    const taglineValid = Boolean(formData.tagline?.trim());
+    const websiteUrlValid = Boolean(formData.website_url?.trim());
+    const categoryValid = Boolean(formData.category?.trim());
+
+    if (!nameValid || !taglineValid || !websiteUrlValid || !categoryValid) {
       setErrorMsg(
         "Please fill in all required fields (App Name, Tagline, Website URL, and Category).",
       );
-      setIsSubmitting(false);
       return;
     }
 
     if (formData.is_for_sale) {
-      if (!formData.asking_price || Number(formData.asking_price) <= 0) {
+      const askingPriceValid = Boolean(formData.asking_price) && Number(formData.asking_price) > 0;
+      const sellerContactValid = Boolean(formData.seller_contact?.trim());
+      if (!askingPriceValid) {
         setErrorMsg(
           "Please enter a valid Asking Price for your startup listing.",
         );
-        setIsSubmitting(false);
         return;
       }
-      if (!formData.seller_contact?.trim()) {
+      if (!sellerContactValid) {
         setErrorMsg(
           "Please provide a seller contact email or link for potential buyers.",
         );
-        setIsSubmitting(false);
         return;
       }
-    }
-
-    if (step < 3 && formData.tier !== "paddle_featured") {
-      setStep((currentStep) => (currentStep + 1) as 2 | 3);
-      setIsSubmitting(false);
-      return;
     }
 
     let normalizedUrl = formData.website_url.trim();
@@ -295,7 +287,6 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
             ? "Error: VITE_PADDLE_CLIENT_TOKEN is missing"
             : "Error: VITE_PADDLE_PRICE_ID is missing";
         setPaymentError(diagnostic);
-        setIsSubmitting(false);
         return;
       }
 
@@ -327,9 +318,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     } else {
       // Free Submission -> Queue for review
       setIsSubmitting(true);
-      await onSubmitTool(baseTool, false);
-      setIsSubmitting(false);
-      onClose();
+      void handleDirectSubmit();
     }
   };
 
