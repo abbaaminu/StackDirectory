@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ChevronUp, ExternalLink, X } from "lucide-react";
+import { Check, ChevronUp, Copy, ExternalLink, Share2, X } from "lucide-react";
 import type { Tool } from "../types/directory";
 
 interface ToolDetailModalProps {
@@ -17,6 +17,9 @@ const getHostname = (url: string): string => {
   }
 };
 
+export const getToolSlug = (tool: Tool): string =>
+  tool.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || tool.id;
+
 export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
   isOpen,
   tool,
@@ -25,12 +28,18 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
 }) => {
   const [logoSource, setLogoSource] = useState("");
   const [logoFailed, setLogoFailed] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
+  const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
+  const [shareNotice, setShareNotice] = useState("");
 
   useEffect(() => {
     if (tool) {
       const hostname = getHostname(tool.website_url);
       setLogoSource(tool.icon_url || `https://icon.horse/icon/${hostname}`);
       setLogoFailed(false);
+      setIsCopied(false);
+      setIsShareMenuOpen(false);
+      setShareNotice("");
     }
   }, [tool]);
 
@@ -38,6 +47,34 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
 
   const hostname = getHostname(tool.website_url);
   const fallback = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
+  const toolSlug = (tool as Tool & { slug?: string }).slug || tool.id;
+  const shareUrl = `https://apps.stackbuildco.com/?tool=${encodeURIComponent(toolSlug)}`;
+  const shareTitle = `${tool.name} - StackDirectory`;
+  const shareText = `Check out ${tool.name} on StackDirectory!`;
+
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setIsCopied(true);
+      setShareNotice("Link copied to clipboard!");
+      window.setTimeout(() => setIsCopied(false), 2000);
+    } catch {
+      setIsCopied(false);
+      setShareNotice("Could not copy link.");
+    }
+  };
+
+  const shareListing = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
+        return;
+      } catch {
+        // The user may dismiss the native share sheet; keep the direct options available.
+      }
+    }
+    await copyShareLink();
+  };
 
   return (
     <div
@@ -50,14 +87,35 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
       }}
     >
       <article className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-2xl sm:p-8">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close details"
-          className="absolute right-4 top-4 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        <div className="absolute right-4 top-4 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setIsShareMenuOpen((current) => !current)}
+            aria-label="Share listing"
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <Share2 className="h-4 w-4" />
+            Share
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close details"
+            className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          {isShareMenuOpen && (
+            <div className="absolute right-0 top-11 z-10 w-48 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+              <button type="button" onClick={() => void copyShareLink()} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                <Copy className="h-3.5 w-3.5" /> Copy Link
+              </button>
+              <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noopener noreferrer" className="block rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Share on X / Twitter</a>
+              <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noopener noreferrer" className="block rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Share on LinkedIn</a>
+              {typeof navigator.share === "function" && <button type="button" onClick={() => void shareListing()} className="block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50">Share from device</button>}
+            </div>
+          )}
+        </div>
 
         <div className="flex items-start gap-4 pr-8">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-emerald-50 text-xl font-black text-emerald-700">
@@ -110,6 +168,32 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
             ))}
           </div>
         )}
+
+        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          {shareNotice && <p className="mb-3 text-xs font-semibold text-emerald-700" role="status">{shareNotice}</p>}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Share Listing</h3>
+              <p className="mt-1 text-xs text-slate-500">Send this tool page to your network.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void shareListing()}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              Share Listing
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={() => void copyShareLink()} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-emerald-400">
+              {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+              {isCopied ? "Copied" : "Copy Link"}
+            </button>
+            <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-slate-500">Share on X</a>
+            <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-slate-500">LinkedIn</a>
+          </div>
+        </div>
 
         <div className="mt-7 flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
           <a href={tool.website_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-bold text-emerald-600 hover:underline">

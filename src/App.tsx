@@ -10,7 +10,7 @@ import { SubmitModal } from "./components/SubmitModal";
 import { AcquisitionModal } from "./components/AcquisitionModal";
 import { AuthModal } from "./components/AuthModal";
 import { AdminQueueModal } from "./components/AdminQueueModal";
-import { ToolDetailModal } from "./components/ToolDetailModal";
+import { getToolSlug, ToolDetailModal } from "./components/ToolDetailModal";
 import { DealRoomModal } from "./components/DealRoomModal";
 
 const PRICING_FILTERS: ReadonlyArray<"All" | PricingType> = [
@@ -24,6 +24,15 @@ type ViewMode = "all" | "for_sale";
 
 const VOTED_TOOLS_KEY = "voted_tools";
 const LOCAL_TOOLS_KEY = "stackdirectory_tools";
+
+const getToolFromUrl = (toolParam: string, availableTools: Tool[]): Tool | null => {
+  const normalizedParam = toolParam.toLowerCase();
+  return availableTools.find((tool) =>
+    ((tool as Tool & { slug?: string }).slug?.toLowerCase() === normalizedParam) ||
+      getToolSlug(tool) === normalizedParam ||
+      tool.id.toLowerCase() === normalizedParam,
+  ) ?? null;
+};
 
 const getVotedTools = (): string[] => {
   try {
@@ -75,6 +84,29 @@ export default function App() {
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const isAuthenticated = Boolean(session || localAuthenticated);
+
+  const openToolDetails = (tool: Tool) => {
+    setSelectedDetailTool(tool);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tool", getToolSlug(tool));
+    window.history.pushState({ tool: getToolSlug(tool) }, "", url);
+  };
+
+  const closeToolDetails = () => {
+    setSelectedDetailTool(null);
+    window.history.pushState({}, "", window.location.pathname);
+  };
+
+  useEffect(() => {
+    const syncToolFromUrl = () => {
+      const toolParam = new URLSearchParams(window.location.search).get("tool");
+      setSelectedDetailTool(toolParam ? getToolFromUrl(toolParam, tools) : null);
+    };
+
+    syncToolFromUrl();
+    window.addEventListener("popstate", syncToolFromUrl);
+    return () => window.removeEventListener("popstate", syncToolFromUrl);
+  }, [tools]);
 
   const fetchApprovedTools = useCallback(async () => {
     try {
@@ -487,7 +519,7 @@ export default function App() {
                 tool={tool}
                 onToggleUpvote={handleToggleUpvote}
                 onOpenAcquisition={(t) => setSelectedAcquisitionTool(t)}
-                onOpenDetails={(t) => setSelectedDetailTool(t)}
+                onOpenDetails={openToolDetails}
                 onOpenDealRoom={(t) => setSelectedDealRoomTool(t)}
               />
             ))}
@@ -569,12 +601,12 @@ export default function App() {
         }}
       />}
 
-      {isAuthenticated && <ToolDetailModal
+      <ToolDetailModal
         isOpen={Boolean(selectedDetailTool)}
         tool={selectedDetailTool}
-        onClose={() => setSelectedDetailTool(null)}
+        onClose={closeToolDetails}
         onToggleUpvote={(toolId) => void handleToggleUpvote(toolId)}
-      />}
+      />
 
       {isAuthenticated && <DealRoomModal
         isOpen={Boolean(selectedDealRoomTool)}
