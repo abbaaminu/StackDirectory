@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   X,
   ShieldCheck,
@@ -8,14 +8,15 @@ import {
   ExternalLink,
   Clock,
 } from "lucide-react";
+import type { User } from "@supabase/supabase-js";
 import { Tool } from "../types/directory";
+import supabase from "../lib/supabase";
 
 interface AdminQueueModalProps {
   isOpen: boolean;
   onClose: () => void;
+  user?: User | null;
   tools: Tool[];
-  onApproveTool: (toolId: string) => void;
-  onRejectTool: (toolId: string) => void;
   onToggleFeature: (toolId: string) => void;
   onToggleForSale: (toolId: string) => void;
 }
@@ -23,16 +24,98 @@ interface AdminQueueModalProps {
 export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
   isOpen,
   onClose,
+  user,
   tools,
-  onApproveTool,
-  onRejectTool,
   onToggleFeature,
   onToggleForSale,
 }) => {
+  const [pendingTools, setPendingTools] = useState<Tool[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [queueError, setQueueError] = useState<string | null>(null);
+  const [updatingToolId, setUpdatingToolId] = useState<string | null>(null);
+  const adminEmail = import.meta.env.VITE_ADMIN_EMAIL?.trim().toLowerCase();
+  const isAdmin = Boolean(
+    user &&
+      (user.app_metadata?.role === "admin" ||
+        (adminEmail && user.email?.toLowerCase() === adminEmail)),
+  );
+
+  useEffect(() => {
+    if (!isOpen || !isAdmin) return;
+
+    let cancelled = false;
+    const fetchPendingTools = async () => {
+      if (!supabase) {
+        setQueueError("Supabase is not configured.");
+        return;
+      }
+
+      setIsLoading(true);
+      setQueueError(null);
+      const { data, error } = await supabase
+        .from("tools")
+        .select("*")
+        .eq("is_approved", false)
+        .order("created_at", { ascending: false });
+
+      if (cancelled) return;
+      if (error) {
+        setQueueError(error.message);
+      } else {
+        setPendingTools((data as Tool[]) ?? []);
+      }
+      setIsLoading(false);
+    };
+
+    void fetchPendingTools();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, isOpen]);
+
+  const updateQueueTool = async (toolId: string, action: "approve" | "reject") => {
+    if (!supabase) {
+      setQueueError("Supabase is not configured.");
+      return;
+    }
+
+    setUpdatingToolId(toolId);
+    setQueueError(null);
+    const { error } = await supabase
+      .from("tools")
+      .update(
+        (action === "approve"
+          ? { is_approved: true, status: "active" }
+          : { status: "rejected" }) as never,
+      )
+      .eq("id", toolId);
+
+    if (error) {
+      setQueueError(error.message);
+    } else {
+      setPendingTools((current) => current.filter((tool) => tool.id !== toolId));
+    }
+    setUpdatingToolId(null);
+  };
+
   if (!isOpen) return null;
 
-  const pendingTools = tools.filter((t) => !t.is_approved);
   const approvedTools = tools.filter((t) => t.is_approved);
+
+  if (!isAdmin) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div className="relative w-full max-w-md rounded-2xl border border-zinc-800 bg-[#0c0d14] p-6 text-zinc-100 shadow-2xl">
+          <button onClick={onClose} className="absolute right-5 top-5 p-1 text-zinc-400 hover:text-white" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+          <ShieldCheck className="h-8 w-8 text-red-400" />
+          <h2 className="mt-3 text-lg font-bold text-white">Admin access required</h2>
+          <p className="mt-1 text-sm text-zinc-400">This moderation queue is restricted to authorized administrators.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
@@ -76,7 +159,17 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
             </span>
           </div>
 
-          {pendingTools.length === 0 ? (
+          {queueError && (
+            <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
+              {queueError}
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="mt-3 rounded-xl border border-zinc-800/60 bg-zinc-900/30 py-8 text-center text-xs text-zinc-500">
+              Loading pending submissions...
+            </div>
+          ) : pendingTools.length === 0 ? (
             <div className="py-8 text-center text-xs text-zinc-500 bg-zinc-900/30 rounded-xl border border-zinc-800/60 mt-3">
               No pending apps in the queue. All submissions are approved or
               upgraded!
@@ -108,6 +201,9 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                       )}
                     </div>
                     <p className="text-xs text-zinc-400">{tool.tagline}</p>
+                    <p className="text-[11px] text-zinc-500">
+                      Submitted {new Date(tool.created_at).toLocaleString()}
+                    </p>
                     <a
                       href={tool.website_url}
                       target="_blank"
@@ -121,7 +217,8 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
 
                   <div className="flex items-center gap-2 shrink-0">
                     <button
-                      onClick={() => onApproveTool(tool.id)}
+                      onClick={() => void updateQueueTool(tool.id, "approve")}
+                      disabled={updatingToolId === tool.id}
                       className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition"
                       title="Approve Free Submission"
                     >
@@ -147,7 +244,8 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                     </button>
 
                     <button
-                      onClick={() => onRejectTool(tool.id)}
+                      onClick={() => void updateQueueTool(tool.id, "reject")}
+                      disabled={updatingToolId === tool.id}
                       className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition"
                       title="Reject / Delete"
                     >

@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import type { IncomingMessage, ServerResponse } from "http";
 
+type WebhookRequest = IncomingMessage & {
+  body?: unknown;
+};
+
 /**
  * Paddle Webhook Handler — Vercel Serverless Function
  *
@@ -48,7 +52,7 @@ function collectBody(req: IncomingMessage): Promise<string> {
 }
 
 export default async function handler(
-  req: IncomingMessage,
+  req: WebhookRequest,
   res: ServerResponse,
 ) {
   // Only accept POST requests from Paddle
@@ -60,11 +64,20 @@ export default async function handler(
   }
 
   try {
-    // 1. Parse raw JSON body
-    const rawBody = await collectBody(req);
-    const payload: PaddleWebhookPayload = JSON.parse(rawBody || "{}");
+    // Vercel may provide a parsed body; fall back to reading the raw stream.
+    const payload: PaddleWebhookPayload =
+      req.body && typeof req.body === "object"
+        ? (req.body as PaddleWebhookPayload)
+        : JSON.parse((await collectBody(req)) || "{}");
 
     const { event_type, data } = payload;
+
+    if (!event_type || typeof event_type !== "string") {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ success: false, error: "Invalid webhook payload" }));
+      return;
+    }
 
     // 2. Only handle successful (completed) transactions
     if (event_type !== "transaction.completed") {
@@ -81,19 +94,17 @@ export default async function handler(
     const customData = data?.custom_data ?? {};
     const toolId =
       customData.tool_id ?? (data as Record<string, unknown>)?.tool_id;
-    const customerId = data?.customer_id ?? null;
 
-    if (!toolId) {
+    if (typeof toolId !== "string" || !toolId.trim()) {
       console.warn("[Paddle Webhook] Missing tool_id in custom_data payload.");
-      res.statusCode = 200;
+      res.statusCode = 400;
       res.setHeader("Content-Type", "application/json");
-      res.end(JSON.stringify({ success: true }));
+      res.end(JSON.stringify({ success: false, error: "Missing tool_id" }));
       return;
     }
 
     // 4. Build a server-side Supabase admin client using the Service Role Key
-    const supabaseUrl =
-      process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
+    const supabaseUrl = process.env.VITE_SUPABASE_URL ?? "";
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
     if (!supabaseUrl || !serviceRoleKey) {
@@ -124,9 +135,9 @@ export default async function handler(
       .update({
         is_approved: true,
         is_featured: true,
-        paddle_customer_id: typeof customerId === "string" ? customerId : null,
+        status: "active",
       } as never)
-      .eq("id", toolId);
+      .eq("id", toolId.trim());
 
     if (error) {
       console.error("[Paddle Webhook] Database update failed:", error.message);

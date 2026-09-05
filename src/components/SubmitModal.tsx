@@ -423,11 +423,11 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               }
               className={`cursor-pointer rounded-xl p-4 border transition-all relative overflow-hidden ${
                 formData.tier === "paddle_featured"
-                  ? "bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-amber-500/5 border-amber-500 ring-2 ring-amber-500/30"
+                  ? "bg-linear-to-br from-amber-500/15 via-orange-500/10 to-amber-500/5 border-amber-500 ring-2 ring-amber-500/30"
                   : "bg-zinc-900/60 border-zinc-800 hover:border-amber-500/40"
               }`}
             >
-              <div className="absolute top-0 right-0 bg-gradient-to-l from-amber-500 to-orange-500 text-zinc-950 text-[9px] font-black px-2 py-0.5 rounded-bl">
+              <div className="absolute top-0 right-0 bg-linear-to-l from-amber-500 to-orange-500 text-zinc-950 text-[9px] font-black px-2 py-0.5 rounded-bl">
                 INSTANT LAUNCH
               </div>
               <div className="flex items-center justify-between">
@@ -449,7 +449,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
           </div>
 
           {/* Acquisition Marketplace Toggle (Acquire / Microns mode) */}
-          <div className="p-4 rounded-xl bg-gradient-to-r from-zinc-900/90 via-amber-500/5 to-zinc-900/90 border border-amber-500/30 shadow-inner">
+          <div className="p-4 rounded-xl bg-linear-to-r from-zinc-900/90 via-amber-500/5 to-zinc-900/90 border border-amber-500/30 shadow-inner">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
@@ -731,7 +731,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
 
               {formData.tier === "paddle_featured" && (
                 <div>
-                  <label className="block text-xs font-medium text-amber-300 mb-1 flex items-center gap-1">
+                  <label className="text-xs font-medium text-amber-300 mb-1 flex items-center gap-1">
                     <Lock className="w-3 h-3" /> Billing Email (Paddle $19)
                   </label>
                   <input
@@ -787,7 +787,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting || isProcessingCheckout || showCheckoutSuccess}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold text-zinc-950 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-lg shadow-amber-500/20 active:scale-95 transition disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold text-zinc-950 bg-linear-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-lg shadow-amber-500/20 active:scale-95 transition disabled:opacity-50"
                 >
                   {isSubmitting || isProcessingCheckout ? (
                     <>

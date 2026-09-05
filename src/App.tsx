@@ -143,9 +143,13 @@ export default function App() {
   const isAdmin = Boolean(
     session?.user.app_metadata?.role === "admin" ||
       (session?.user.email &&
-        (import.meta.env.VITE_ADMIN_EMAILS ?? "")
-          .split(",")
-          .map((email: string) => email.trim().toLowerCase())
+        [
+          ...(import.meta.env.VITE_ADMIN_EMAILS ?? "")
+            .split(",")
+            .map((email: string) => email.trim().toLowerCase()),
+          import.meta.env.VITE_ADMIN_EMAIL?.trim().toLowerCase(),
+        ]
+          .filter(Boolean)
           .includes(session.user.email.toLowerCase())),
   );
 
@@ -346,7 +350,7 @@ export default function App() {
   return (
     <div className="bg-[#F8FAFC] min-h-screen text-slate-900 font-sans relative overflow-x-hidden">
       {/* Ambient Header Glow */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(100%_50%_at_50%_0%,rgba(245,158,11,0.12)_0%,transparent_100%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-130 bg-[radial-gradient(100%_50%_at_50%_0%,rgba(245,158,11,0.12)_0%,transparent_100%)]" />
       {/* Header with Submit App button */}
       <Header
         onOpenSubmit={() => setIsSubmitModalOpen(true)}
@@ -590,9 +594,8 @@ export default function App() {
       {isAuthenticated && <AdminQueueModal
         isOpen={isAdminQueueOpen}
         onClose={() => setIsAdminQueueOpen(false)}
+        user={session?.user}
         tools={adminTools}
-        onApproveTool={(toolId) => void updateAdminTool(toolId, { is_approved: true, status: "approved" })}
-        onRejectTool={(toolId) => void updateAdminTool(toolId, { is_approved: false, status: "rejected" })}
         onToggleFeature={(toolId) => {
           const tool = adminTools.find((item) => item.id === toolId);
           if (tool) void updateAdminTool(toolId, { is_featured: !tool.is_featured });
