@@ -1,46 +1,32 @@
 import { ImageResponse } from '@vercel/og';
 
 export const config = {
-  runtime: 'edge',
+  runtime: 'nodejs',
 };
 
-const getParam = (url: URL, key: string, fallback: string): string =>
-  url.searchParams.get(key)?.trim() || fallback;
-
-export default async function handler(request: Request) {
-  const url = new URL(request.url);
-  const title = getParam(url, "title", "Discover standout developer tools");
-  const tagline = getParam(url, "tagline", "Find useful software and proven micro-SaaS businesses.");
-  const category = getParam(url, "category", "Developer Tools");
-  const pricing = getParam(url, "pricing", "Freemium");
+export default async function handler(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const title = searchParams.get("title") || "StackDirectory";
+  const tagline = searchParams.get("tagline") || "Discover top developer tools & startups";
+  const category = searchParams.get("category") || "Developer Tools";
+  const pricing = searchParams.get("pricing") || "Freemium";
 
   return new ImageResponse(
     (
       <div
         style={{
-          background: "#0F172A",
-          color: "#F8FAFC",
+          backgroundColor: "#0F172A",
+          color: "white",
           display: "flex",
           flexDirection: "column",
+          alignItems: "flex-start",
+          justifyContent: "center",
           height: "100%",
-          justifyContent: "space-between",
-          padding: "72px",
+          padding: "80px",
           width: "100%",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-          <div
-            style={{
-              color: "#F59E0B",
-              display: "flex",
-              fontSize: 26,
-              fontWeight: 700,
-              letterSpacing: 1,
-              textTransform: "uppercase",
-            }}
-          >
-            StackDirectory
-          </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
           <div
             style={{
               alignItems: "center",
@@ -50,7 +36,7 @@ export default async function handler(request: Request) {
           >
             <div
               style={{
-                background: "#F59E0B",
+                backgroundColor: "#F59E0B",
                 borderRadius: 999,
                 color: "#0F172A",
                 display: "flex",
@@ -68,45 +54,34 @@ export default async function handler(request: Request) {
           <div
             style={{
               display: "flex",
-              fontSize: 64,
+              fontSize: 60,
               fontWeight: 800,
-              lineHeight: 1.05,
               maxWidth: 1000,
+              marginTop: 32,
             }}
           >
             {title}
           </div>
           <div
             style={{
-              color: "#CBD5E1",
+              color: "#94A3B8",
               display: "flex",
-              fontSize: 30,
-              lineHeight: 1.3,
+              fontSize: 28,
               maxWidth: 950,
+              marginTop: 20,
             }}
           >
             {tagline}
           </div>
-        </div>
-        <div
-          style={{
-            borderTop: "2px solid #334155",
-            color: "#94A3B8",
-            display: "flex",
-            fontSize: 24,
-            paddingTop: 24,
-          }}
-        >
-          Explore more tools at apps.stackbuildco.com
+          <div style={{ marginTop: 40, fontSize: 20, color: "#64748B", display: "flex" }}>
+            StackDirectory • apps.stackbuildco.com
+          </div>
         </div>
       </div>
     ),
     {
       width: 1200,
       height: 630,
-      headers: {
-        "Cache-Control": "public, max-age=86400, s-maxage=86400",
-      },
     },
   );
 }
