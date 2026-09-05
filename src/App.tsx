@@ -15,6 +15,7 @@ import { DealRoomModal } from "./components/DealRoomModal";
 import { FAQModal } from "./components/FAQModal";
 import { TermsModal } from "./components/TermsModal";
 import { Footer } from "./components/Footer";
+import { SupportModal } from "./components/SupportModal";
 
 const PRICING_FILTERS: ReadonlyArray<"All" | PricingType> = [
   "All",
@@ -85,6 +86,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [isFAQOpen, setIsFAQOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
 
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -647,9 +649,11 @@ export default function App() {
       <Footer
         onOpenFAQ={() => setIsFAQOpen(true)}
         onOpenTerms={() => setIsTermsOpen(true)}
+        onOpenSupport={() => setIsSupportOpen(true)}
       />
       <FAQModal isOpen={isFAQOpen} onClose={() => setIsFAQOpen(false)} />
       <TermsModal isOpen={isTermsOpen} onClose={() => setIsTermsOpen(false)} />
+      <SupportModal isOpen={isSupportOpen} onClose={() => setIsSupportOpen(false)} />
     </div>
   );
 }
