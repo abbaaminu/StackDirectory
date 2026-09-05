@@ -3,24 +3,39 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    
+    <!-- Favicon (Inline Data URI for guaranteed display) -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230F172A'/><path d='M16 25L7 20L16 15L25 20L16 25Z' fill='%23F59E0B' opacity='0.4'/><path d='M16 20L7 15L16 10L25 15L16 20Z' fill='%23F59E0B' opacity='0.75'/><path d='M16 15L7 10L16 5L25 10L16 15Z' fill='%23F59E0B'/><path d='M16 7L16.6 8.5L18.2 8.7L17 9.8L17.3 11.4L16 10.6L14.7 11.4L15 9.8L13.8 8.7L15.4 8.5L16 7Z' fill='%23FFFFFF'/></svg>" />
+
     <title>StackDirectory — Discover &amp; Acquire Developer Tools</title>
     <meta
       name="description"
-      content="Discover and acquire the best developer tools and micro-SaaS products."
+      content="Discover, upvote, and acquire the best developer tools and micro-SaaS products on StackDirectory."
     />
-    <meta property="og:title" content="StackDirectory" />
+
+    <!-- OpenGraph Meta Tags -->
+    <meta property="og:title" content="StackDirectory — Discover &amp; Acquire Developer Tools" />
     <meta
       property="og:description"
-      content="An application built with Google AI Studio."
+      content="Discover, upvote, and acquire the best developer tools and micro-SaaS products on StackDirectory."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/api/og" />
+    <meta property="og:url" content="https://apps.stackbuildco.com" />
+    <meta property="og:image" content="https://apps.stackbuildco.com/api/og" />
+
+    <!-- Twitter Meta Tags -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="StackDirectory — Discover &amp; Acquire Developer Tools" />
+    <meta
+      name="twitter:description"
+      content="Discover, upvote, and acquire the best developer tools and micro-SaaS products on StackDirectory."
+    />
+    <meta name="twitter:image" content="https://apps.stackbuildco.com/api/og" />
+
     <!-- Paddle.js V2 SDK -->
     <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
   </head>
-  <body>
+  <body class="bg-slate-950 text-slate-100 antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
