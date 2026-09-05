@@ -16,6 +16,7 @@ import { FAQModal } from "./components/FAQModal";
 import { TermsModal } from "./components/TermsModal";
 import { Footer } from "./components/Footer";
 import { SupportModal } from "./components/SupportModal";
+import { FeaturedBadgeIcon } from "./components/icons/FeaturedBadgeIcon";
 
 const PRICING_FILTERS: ReadonlyArray<"All" | PricingType> = [
   "All",
@@ -519,18 +520,30 @@ export default function App() {
             <p>{error}</p>
           </div>
         ) : displayedTools.length > 0 ? (
-          <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {displayedTools.map((tool) => (
-              <ToolCard
-                key={tool.id}
-                tool={tool}
-                onToggleUpvote={handleToggleUpvote}
-                onOpenAcquisition={(t) => setSelectedAcquisitionTool(t)}
-                onOpenDetails={openToolDetails}
-                onOpenDealRoom={(t) => setSelectedDealRoomTool(t)}
-              />
-            ))}
-          </div>
+          <>
+            {displayedTools.some((tool) => tool.is_featured) && (
+              <div className="max-w-7xl mx-auto px-4 pt-8">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                  <FeaturedBadgeIcon className="h-5 w-5" size={20} />
+                  <span className="bg-linear-to-r from-amber-600 to-orange-500 bg-clip-text text-transparent dark:from-amber-400 dark:to-orange-300">
+                    FEATURED RECOMMENDATIONS
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {displayedTools.map((tool) => (
+                <ToolCard
+                  key={tool.id}
+                  tool={tool}
+                  onToggleUpvote={handleToggleUpvote}
+                  onOpenAcquisition={(t) => setSelectedAcquisitionTool(t)}
+                  onOpenDetails={openToolDetails}
+                  onOpenDealRoom={(t) => setSelectedDealRoomTool(t)}
+                />
+              ))}
+            </div>
+          </>
         ) : (
           <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
             <p className="text-slate-500">

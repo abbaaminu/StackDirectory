@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import {
   ChevronUp,
-  Sparkles,
   ShoppingBag,
   Star,
   Heart,
 } from "lucide-react";
 import { Tool } from "../types/directory";
 import { handleVisitWebsite } from "../lib/trackToolClick";
+import { FeaturedBadgeIcon } from "./icons/FeaturedBadgeIcon";
 
 const getHostname = (url: string): string | null => {
   try {
@@ -91,8 +91,8 @@ export const ToolCard: React.FC<ToolCardProps> = ({
         )}
 
         {tool.is_featured && !tool.is_for_sale && (
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-linear-to-r from-amber-400 to-orange-400 text-zinc-950 shadow-md shadow-amber-500/20">
-            <Sparkles className="w-3 h-3 fill-zinc-950" />
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+            <FeaturedBadgeIcon className="h-4 w-4" size={16} />
             <span>FEATURED APP</span>
           </div>
         )}
