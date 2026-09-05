@@ -107,7 +107,16 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     }
     if (window.Paddle && clientToken) {
       try {
-        window.Paddle.Initialize({ token: clientToken });
+        window.Paddle.Initialize({
+          token: clientToken,
+          eventCallback: (event) => {
+            if (event.event_type === "checkout.closed" || event.event_type === "checkout.error") {
+              setIsProcessingCheckout(false);
+              setIsSubmitting(false);
+              setShowCheckoutSuccess(false);
+            }
+          },
+        });
       } catch (error) {
         console.error("Paddle initialization failed:", error);
         setPaymentError(error instanceof Error ? error.message : String(error));
@@ -191,7 +200,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       }
     }
 
-    if (step < 3) {
+    if (step < 3 && formData.tier !== "paddle_featured") {
       setStep((currentStep) => (currentStep + 1) as 2 | 3);
       setIsSubmitting(false);
       return;
@@ -294,19 +303,9 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       setIsProcessingCheckout(true);
       let checkoutOpened = false;
       try {
-        paddle.Initialize({
-          token: clientToken,
-          eventCallback: (event) => {
-            if (event.event_type === "checkout.closed" || event.event_type === "checkout.error") {
-              setIsProcessingCheckout(false);
-              setIsSubmitting(false);
-              setShowCheckoutSuccess(false);
-            }
-          },
-        });
         paddle.Checkout.open({
           items: [{ priceId, quantity: 1 }],
-          customer: { email: formData.customer_email },
+          customer: (formData.customer_email) ? { email: formData.customer_email || "" } : undefined,
           customData: { tool_id: baseTool.id, plan_type: "featured_monthly" },
           settings: { displayMode: "overlay" },
         });
