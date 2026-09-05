@@ -20,6 +20,16 @@ interface DealMessage {
   created_at: string;
 }
 
+interface AcquisitionOffer {
+  id: string;
+  tool_id: string;
+  buyer_id?: string;
+  offer_amount: number;
+  message?: string | null;
+  status: string;
+  created_at: string;
+}
+
 interface DealRoomModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -29,6 +39,7 @@ interface DealRoomModalProps {
 
 const LOCAL_CONVERSATIONS = "stackdirectory_deal_conversations";
 const LOCAL_MESSAGES = "stackdirectory_deal_messages";
+const LOCAL_OFFERS = "stackdirectory_acquisition_offers";
 
 function readLocal<T>(key: string): T[] {
   try {
@@ -48,6 +59,11 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [offers, setOffers] = useState<AcquisitionOffer[]>([]);
+  const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
+  const [offerAmount, setOfferAmount] = useState("");
+  const [offerMessage, setOfferMessage] = useState("");
+  const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !tool) return;
@@ -74,6 +90,7 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
         if (!cancelled) {
           setConversation(activeConversation);
           setMessages(readLocal<DealMessage>(LOCAL_MESSAGES).filter((item) => item.conversation_id === activeConversation.id));
+          setOffers(readLocal<AcquisitionOffer>(LOCAL_OFFERS).filter((item) => item.tool_id === tool.id && item.buyer_id === userId));
           setIsLoading(false);
         }
         return;
@@ -109,9 +126,17 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
         .select("*")
         .eq("conversation_id", activeConversation.id)
         .order("created_at", { ascending: true });
+      const { data: existingOffers, error: offersError } = await supabase
+        .from("acquisition_offers")
+        .select("*")
+        .eq("tool_id", tool.id)
+        .eq("buyer_id", userId)
+        .order("created_at", { ascending: false });
       if (!cancelled) {
         setConversation(activeConversation);
         setMessages((roomMessages as DealMessage[]) || []);
+        if (offersError) setError("Unable to load existing offers.");
+        setOffers((existingOffers as AcquisitionOffer[]) || []);
         setIsLoading(false);
       }
     };
@@ -175,6 +200,84 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
     setIsSubmitting(false);
   };
 
+  const submitOffer = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const amount = Number(offerAmount);
+    if (!conversation || !tool || !Number.isFinite(amount) || amount <= 0) {
+      setError("Please enter a valid offer amount.");
+      return;
+    }
+
+    setIsSubmittingOffer(true);
+    setError(null);
+    const messageText = offerMessage.trim();
+    const formattedMessage = `[OFFER SUBMITTED] $${amount.toLocaleString("en-US")} - "${messageText}"`;
+    try {
+      if (!isSupabaseConfigured || !supabase) {
+        const localOffer: AcquisitionOffer = {
+          id: `offer_${Date.now()}`,
+          tool_id: tool.id,
+          buyer_id: userId,
+          offer_amount: amount,
+          message: messageText,
+          status: "pending",
+          created_at: new Date().toISOString(),
+        };
+        const localOffers = [...readLocal<AcquisitionOffer>(LOCAL_OFFERS), localOffer];
+        localStorage.setItem(LOCAL_OFFERS, JSON.stringify(localOffers));
+        const localMessage: DealMessage = {
+          id: `message_${Date.now()}`,
+          conversation_id: conversation.id,
+          sender_id: userId,
+          message_text: formattedMessage,
+          created_at: new Date().toISOString(),
+        };
+        localStorage.setItem(LOCAL_MESSAGES, JSON.stringify([...readLocal<DealMessage>(LOCAL_MESSAGES), localMessage]));
+        setOffers((current) => [localOffer, ...current]);
+        setMessages((current) => [...current, localMessage]);
+      } else {
+        const { data: authData } = await supabase.auth.getUser();
+        const buyerEmail = authData.user?.email || `${userId}@local.invalid`;
+        const buyerName = authData.user?.user_metadata?.full_name || buyerEmail;
+        const { data: createdOffer, error: offerError } = await supabase
+          .from("acquisition_offers")
+          .insert({
+            tool_id: tool.id,
+            buyer_id: userId,
+            buyer_name: buyerName,
+            buyer_email: buyerEmail,
+            offer_amount: amount,
+            message: messageText || null,
+            status: "pending",
+          } as never)
+          .select("*")
+          .single();
+        if (offerError) throw offerError;
+
+        const { data: createdMessage, error: messageError } = await supabase
+          .from("deal_messages")
+          .insert({
+            conversation_id: conversation.id,
+            sender_id: userId,
+            message_text: formattedMessage,
+          } as never)
+          .select("*")
+          .single();
+        if (messageError) throw messageError;
+        setOffers((current) => [createdOffer as AcquisitionOffer, ...current]);
+        setMessages((current) => [...current, createdMessage as DealMessage]);
+      }
+      setOfferAmount("");
+      setOfferMessage("");
+      setIsOfferModalOpen(false);
+    } catch (submitError) {
+      console.error("Offer submission failed:", submitError);
+      setError("Could not submit your offer. Please try again.");
+    } finally {
+      setIsSubmittingOffer(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
       <section className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
@@ -188,10 +291,18 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
         {isLoading ? <div className="p-10 text-center text-sm text-slate-500">Opening secure deal room...</div> : !conversation?.nda_signed ? (
           <div className="p-8 text-center"><LockKeyhole className="mx-auto h-10 w-10 text-amber-600" /><h3 className="mt-4 text-xl font-bold text-slate-950">Standard Non-Disclosure &amp; Anti-Circumvention Agreement</h3><p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-600">Before viewing private acquisition details or messaging the founder, agree to keep confidential information private and communicate through this Deal Room.</p><button type="button" onClick={() => void signNda()} disabled={isSigning} className="mt-6 rounded-xl bg-amber-400 px-5 py-3 text-sm font-bold text-slate-950 hover:bg-amber-300 disabled:opacity-60">{isSigning ? "Recording agreement..." : "I Agree & Sign NDA"}</button></div>
         ) : (
-          <><div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-5 min-h-64">{messages.length === 0 ? <p className="py-10 text-center text-sm text-slate-500">No messages yet. Start the conversation.</p> : messages.map((item) => <div key={item.id} className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${item.sender_id === userId ? "ml-auto bg-emerald-600 text-white" : "bg-white text-slate-700 border border-slate-200"}`}><p>{item.message_text}</p><time className="mt-1 block text-[10px] opacity-70">{new Date(item.created_at).toLocaleString()}</time></div>)}</div><div className="border-t border-slate-200 p-4">{notice && <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">To protect both parties, external links, phone numbers, and email addresses are automatically masked.</p>}{error && <p className="mb-3 text-xs text-red-600">{error}</p>}<form onSubmit={sendMessage} className="flex gap-2"><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message to the founder..." className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20" /><button type="submit" disabled={isSubmitting} aria-label="Send message" className="rounded-xl bg-emerald-600 px-4 py-2.5 text-white hover:bg-emerald-500 disabled:opacity-60">{isSubmitting ? "Submitting..." : <Send className="h-4 w-4" />}</button></form></div></>
+          <><div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-5 min-h-64">{offers.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><strong>Active Offer:</strong> ${offers[0].offer_amount.toLocaleString("en-US")} · {offers[0].status.charAt(0).toUpperCase() + offers[0].status.slice(1)}</div>}{messages.length === 0 ? <p className="py-10 text-center text-sm text-slate-500">No messages yet. Start the conversation.</p> : messages.map((item) => <div key={item.id} className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${item.sender_id === userId ? "ml-auto bg-emerald-600 text-white" : "bg-white text-slate-700 border border-slate-200"}`}><p>{item.message_text}</p><time className="mt-1 block text-[10px] opacity-70">{new Date(item.created_at).toLocaleString()}</time></div>)}</div><div className="border-t border-slate-200 p-4">{notice && <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">To protect both parties, external links, phone numbers, and email addresses are automatically masked.</p>}{error && <p className="mb-3 text-xs text-red-600">{error}</p>}{tool.is_for_sale && <button type="button" onClick={() => setIsOfferModalOpen(true)} className="mb-3 w-full rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-300">Submit Formal Offer</button>}<form onSubmit={sendMessage} className="flex gap-2"><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message to the founder..." className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20" /><button type="submit" disabled={isSubmitting} aria-label="Send message" className="rounded-xl bg-emerald-600 px-4 py-2.5 text-white hover:bg-emerald-500 disabled:opacity-60">{isSubmitting ? "Submitting..." : <Send className="h-4 w-4" />}</button></form></div></>
         )}
         {conversation?.nda_signed && <div className="flex items-center gap-2 border-t border-slate-100 px-5 py-2 text-[11px] text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> NDA verified for this conversation</div>}
       </section>
+      {isOfferModalOpen && <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true">
+        <form onSubmit={submitOffer} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="flex items-center justify-between"><h3 className="text-lg font-bold text-slate-950">Submit Formal Offer</h3><button type="button" onClick={() => setIsOfferModalOpen(false)} aria-label="Close offer form" className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
+          <label className="mt-5 block text-sm font-semibold text-slate-700">Offer Amount ($ USD)<input type="number" min="1" step="0.01" required value={offerAmount} onChange={(event) => setOfferAmount(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-amber-400" /></label>
+          <label className="mt-4 block text-sm font-semibold text-slate-700">Introductory Note / Terms<textarea rows={4} value={offerMessage} onChange={(event) => setOfferMessage(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-amber-400" /></label>
+          <button type="submit" disabled={isSubmittingOffer} className="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-60">{isSubmittingOffer ? "Submitting offer..." : "Submit Offer"}</button>
+        </form>
+      </div>}
     </div>
   );
 };
