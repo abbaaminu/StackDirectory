@@ -8,12 +8,11 @@ import {
 } from "lucide-react";
 import { Tool } from "../types/directory";
 
-const getHostname = (url: string): string => {
+const getHostname = (url: string): string | null => {
   try {
-    const normalizedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-    return new URL(normalizedUrl).hostname;
+    return new URL(url).hostname;
   } catch {
-    return "";
+    return null;
   }
 };
 
@@ -33,17 +32,18 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   onOpenDealRoom,
 }) => {
   const [isUpvoteAnimating, setIsUpvoteAnimating] = useState(false);
-  const [logoSource, setLogoSource] = useState<"custom" | "google" | "initial">(
-    tool.icon_url ? "custom" : "google",
+  const domain = getHostname(tool.website_url);
+  const hasCustomIcon = Boolean(tool.icon_url?.trim());
+  const [logoSource, setLogoSource] = useState<"custom" | "unavatar" | "initial">(
+    hasCustomIcon ? "custom" : domain ? "unavatar" : "initial",
   );
 
-  const domain = getHostname(tool.website_url);
-  const faviconFallback = domain
-    ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`
-    : "";
-  const logoSrc = logoSource === "custom" && tool.icon_url
-    ? tool.icon_url
-    : faviconFallback;
+  const unavatarUrl = domain
+    ? `https://unavatar.io/${domain}?fallback=false`
+    : null;
+  const logoSrc = logoSource === "custom"
+    ? tool.icon_url?.trim()
+    : unavatarUrl;
 
   const handleUpvote = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -125,18 +125,17 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           <div className="relative w-9 h-9 rounded-full border border-slate-100 overflow-hidden shrink-0 flex items-center justify-center bg-linear-to-tr from-amber-500 via-orange-500 to-amber-400">
             {logoSource !== "initial" ? (
               <img
-                src={logoSrc}
+                src={logoSrc || undefined}
                 alt={`${tool.name} logo`}
                 loading="lazy"
                 referrerPolicy="no-referrer"
-                onError={() => setLogoSource((current) => current === "custom" && faviconFallback ? "google" : "initial")}
+                onError={() => setLogoSource((current) => current === "custom" && unavatarUrl ? "unavatar" : "initial")}
                 className="w-full h-full object-cover"
               />
             ) : (
-              <svg viewBox="0 0 40 40" aria-label={`${tool.name} initial avatar`} className="h-full w-full">
-                <rect width="40" height="40" rx="20" fill="#d1fae5" />
-                <text x="20" y="25" textAnchor="middle" fontSize="16" fontWeight="700" fill="#047857">{tool.name.charAt(0).toUpperCase()}</text>
-              </svg>
+              <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-emerald-500 to-teal-700 text-base font-bold text-white" aria-label={`${tool.name} initial avatar`}>
+                {tool.name.charAt(0).toUpperCase()}
+              </div>
             )}
           </div>
 
