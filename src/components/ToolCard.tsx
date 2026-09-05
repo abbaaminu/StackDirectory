@@ -91,8 +91,8 @@ export const ToolCard: React.FC<ToolCardProps> = ({
         )}
 
         {tool.is_featured && !tool.is_for_sale && (
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-            <FeaturedBadgeIcon className="h-4 w-4" size={16} />
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/30 shrink-0">
+            <FeaturedBadgeIcon className="h-4 w-4 shrink-0" />
             <span>FEATURED APP</span>
           </div>
         )}
