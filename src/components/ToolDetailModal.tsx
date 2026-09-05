@@ -44,12 +44,43 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
     }
   }, [tool]);
 
+  const toolSlug = tool ? (tool as Tool & { slug?: string }).slug || tool.id : "";
+  const shareUrl = `https://apps.stackbuildco.com/?tool=${encodeURIComponent(toolSlug)}`;
+  const ogImageUrl = tool
+    ? `https://apps.stackbuildco.com/api/og?title=${encodeURIComponent(tool.name)}&tagline=${encodeURIComponent(tool.tagline)}&category=${encodeURIComponent(tool.category)}&pricing=${encodeURIComponent(tool.pricing_type)}`
+    : "";
+
+  useEffect(() => {
+    if (!isOpen || !tool) return;
+
+    const metadata = [
+      ["property", "og:title", tool.name],
+      ["property", "og:description", tool.tagline],
+      ["property", "og:image", ogImageUrl],
+      ["property", "og:url", shareUrl],
+      ["name", "twitter:card", "summary_large_image"],
+      ["name", "twitter:title", tool.name],
+      ["name", "twitter:description", tool.tagline],
+      ["name", "twitter:image", ogImageUrl],
+    ] as const;
+
+    const elements = metadata.map(([attribute, key, content]) => {
+      const element = document.head.querySelector(`meta[${attribute}="${key}"]`) || document.createElement("meta");
+      element.setAttribute(attribute, key);
+      element.setAttribute("content", content);
+      if (!element.parentNode) document.head.appendChild(element);
+      return element;
+    });
+
+    return () => {
+      elements.forEach((element) => element.remove());
+    };
+  }, [isOpen, ogImageUrl, shareUrl, tool]);
+
   if (!isOpen || !tool) return null;
 
   const hostname = getHostname(tool.website_url);
   const fallback = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
-  const toolSlug = (tool as Tool & { slug?: string }).slug || tool.id;
-  const shareUrl = `https://apps.stackbuildco.com/?tool=${encodeURIComponent(toolSlug)}`;
   const shareTitle = `${tool.name} - StackDirectory`;
   const shareText = `Check out ${tool.name} on StackDirectory!`;
 
