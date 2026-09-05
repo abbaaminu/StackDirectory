@@ -358,8 +358,9 @@ export default function App() {
           setAuthMode(mode);
           setIsAuthOpen(true);
         }}
-        onOpenAdmin={openAdminQueue}
+        onOpenAdminQueue={() => setIsAdminQueueOpen(true)}
         isAuthenticated={isAuthenticated}
+        user={session?.user}
         userEmail={session?.user.email ?? (localAuthenticated ? "demo@stackdirectory.local" : undefined)}
         onSignOut={() => void handleSignOut()}
       />
