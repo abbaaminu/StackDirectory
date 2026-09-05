@@ -10,7 +10,8 @@ import { Tool } from "../types/directory";
 
 const getHostname = (url: string): string => {
   try {
-    return new URL(url).hostname;
+    const normalizedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    return new URL(normalizedUrl).hostname;
   } catch {
     return "";
   }
@@ -32,18 +33,17 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   onOpenDealRoom,
 }) => {
   const [isUpvoteAnimating, setIsUpvoteAnimating] = useState(false);
-  const [logoSource, setLogoSource] = useState<"custom" | "horse" | "google" | "initial">(
-    tool.icon_url ? "custom" : "horse",
+  const [logoSource, setLogoSource] = useState<"custom" | "google" | "initial">(
+    tool.icon_url ? "custom" : "google",
   );
 
-  // Compact, dynamic favicon logo (graceful 2-letter avatar fallback)
   const domain = getHostname(tool.website_url);
-  const faviconFallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+  const faviconFallback = domain
+    ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`
+    : "";
   const logoSrc = logoSource === "custom" && tool.icon_url
     ? tool.icon_url
-    : logoSource === "horse"
-      ? `https://icon.horse/icon/${domain}`
-      : faviconFallback;
+    : faviconFallback;
 
   const handleUpvote = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -129,13 +129,13 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                 alt={`${tool.name} logo`}
                 loading="lazy"
                 referrerPolicy="no-referrer"
-                onError={() => setLogoSource((current) => current === "custom" || current === "horse" ? (current === "custom" ? "horse" : "google") : "initial")}
+                onError={() => setLogoSource((current) => current === "custom" && faviconFallback ? "google" : "initial")}
                 className="w-full h-full object-cover"
               />
             ) : (
               <svg viewBox="0 0 40 40" aria-label={`${tool.name} initial avatar`} className="h-full w-full">
                 <rect width="40" height="40" rx="20" fill="#d1fae5" />
-                <text x="20" y="25" textAnchor="middle" fontSize="16" fontWeight="700" fill="#047857">{tool.name.slice(0, 1).toUpperCase()}</text>
+                <text x="20" y="25" textAnchor="middle" fontSize="16" fontWeight="700" fill="#047857">{tool.name.charAt(0).toUpperCase()}</text>
               </svg>
             )}
           </div>
