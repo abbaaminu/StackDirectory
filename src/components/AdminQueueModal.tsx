@@ -29,7 +29,7 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
   onToggleFeature,
   onToggleForSale,
 }) => {
-  const [pendingTools, setPendingTools] = useState<Tool[]>([]);
+  const [allTools, setAllTools] = useState<Tool[]>(tools);
   const [isLoading, setIsLoading] = useState(false);
   const [queueError, setQueueError] = useState<string | null>(null);
   const [updatingToolId, setUpdatingToolId] = useState<string | null>(null);
@@ -44,7 +44,7 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
     if (!isOpen || !isAdmin) return;
 
     let cancelled = false;
-    const fetchPendingTools = async () => {
+    const fetchTools = async () => {
       if (!supabase) {
         setQueueError("Supabase is not configured.");
         return;
@@ -55,19 +55,20 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
       const { data, error } = await supabase
         .from("tools")
         .select("*")
-        .eq("is_approved", false)
         .order("created_at", { ascending: false });
+
+      console.log("Admin Queue Fetched Tools:", data, "Error:", error);
 
       if (cancelled) return;
       if (error) {
         setQueueError(error.message);
       } else {
-        setPendingTools((data as Tool[]) ?? []);
+        setAllTools((data as Tool[]) ?? []);
       }
       setIsLoading(false);
     };
 
-    void fetchPendingTools();
+    void fetchTools();
     return () => {
       cancelled = true;
     };
@@ -93,14 +94,24 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
     if (error) {
       setQueueError(error.message);
     } else {
-      setPendingTools((current) => current.filter((tool) => tool.id !== toolId));
+      setAllTools((current) => current.map((tool) =>
+        tool.id === toolId
+          ? {
+              ...tool,
+              is_approved: action === "approve" ? true : tool.is_approved,
+              status: action === "approve" ? "approved" : "rejected",
+            }
+          : tool,
+      ));
     }
     setUpdatingToolId(null);
   };
 
   if (!isOpen) return null;
 
-  const approvedTools = tools.filter((t) => t.is_approved);
+  const pendingTools = allTools.filter((tool) => !tool.is_approved);
+  const approvedTools = allTools.filter((tool) => tool.is_approved);
+  const featuredTools = allTools.filter((tool) => tool.is_featured);
 
   if (!isAdmin) {
     return (
@@ -270,7 +281,7 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
           </div>
           <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800">
             <div className="text-xl font-bold text-amber-400">
-              {approvedTools.filter((t) => t.is_featured).length}
+              {featuredTools.length}
             </div>
             <div className="text-[11px] text-zinc-400 mt-0.5">
               Paddle Featured
