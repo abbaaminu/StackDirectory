@@ -1,13 +1,13 @@
-import { ImageResponse } from "@vercel/og";
+import { ImageResponse } from '@vercel/og';
 
 export const config = {
-  runtime: "edge",
+  runtime: 'edge',
 };
 
 const getParam = (url: URL, key: string, fallback: string): string =>
   url.searchParams.get(key)?.trim() || fallback;
 
-export default function handler(request: Request) {
+export default async function handler(request: Request) {
   const url = new URL(request.url);
   const title = getParam(url, "title", "Discover standout developer tools");
   const tagline = getParam(url, "tagline", "Find useful software and proven micro-SaaS businesses.");
