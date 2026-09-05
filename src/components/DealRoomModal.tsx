@@ -41,6 +41,9 @@ const LOCAL_CONVERSATIONS = "stackdirectory_deal_conversations";
 const LOCAL_MESSAGES = "stackdirectory_deal_messages";
 const LOCAL_OFFERS = "stackdirectory_acquisition_offers";
 
+const getToolSlug = (tool: Tool): string =>
+  tool.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || tool.id;
+
 function readLocal<T>(key: string): T[] {
   try {
     const value = JSON.parse(localStorage.getItem(key) || "[]");
@@ -265,6 +268,23 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
         if (messageError) throw messageError;
         setOffers((current) => [createdOffer as AcquisitionOffer, ...current]);
         setMessages((current) => [...current, createdMessage as DealMessage]);
+      }
+      const ownerEmail = tool.seller_contact?.trim();
+      if (ownerEmail) {
+        void fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "NEW_OFFER",
+            toolName: tool.name,
+            ownerEmail,
+            offerAmount: amount,
+            message: messageText,
+            toolSlug: getToolSlug(tool),
+          }),
+        }).catch((notificationError) => {
+          console.error("Offer notification failed:", notificationError);
+        });
       }
       setOfferAmount("");
       setOfferMessage("");

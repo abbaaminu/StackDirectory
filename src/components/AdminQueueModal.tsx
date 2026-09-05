@@ -12,6 +12,9 @@ import type { User } from "@supabase/supabase-js";
 import { Tool } from "../types/directory";
 import supabase from "../lib/supabase";
 
+const getToolSlug = (tool: Tool): string =>
+  tool.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || tool.id;
+
 interface AdminQueueModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -94,6 +97,7 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
     if (error) {
       setQueueError(error.message);
     } else {
+      const approvedTool = allTools.find((tool) => tool.id === toolId);
       setAllTools((current) => current.map((tool) =>
         tool.id === toolId
           ? {
@@ -103,6 +107,21 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
             }
           : tool,
       ));
+      const submitterEmail = approvedTool?.seller_contact?.trim();
+      if (action === "approve" && approvedTool && submitterEmail) {
+        void fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "APP_APPROVED",
+            toolName: approvedTool.name,
+            submitterEmail,
+            toolSlug: getToolSlug(approvedTool),
+          }),
+        }).catch((notificationError) => {
+          console.error("Approval notification failed:", notificationError);
+        });
+      }
     }
     setUpdatingToolId(null);
   };
