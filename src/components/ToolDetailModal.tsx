@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Check, ChevronUp, Copy, ExternalLink, Share2, X } from "lucide-react";
 import type { Tool } from "../types/directory";
+import { handleVisitWebsite } from "../lib/trackToolClick";
 
 interface ToolDetailModalProps {
   isOpen: boolean;
@@ -196,9 +197,14 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
         </div>
 
         <div className="mt-7 flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <a href={tool.website_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-bold text-emerald-600 hover:underline">
+          <div className="flex flex-wrap items-center gap-3">
+          <a href={tool.website_url} target="_blank" rel="noopener noreferrer" onClick={(event) => handleVisitWebsite(event, tool)} className="inline-flex items-center gap-2 text-sm font-bold text-emerald-600 hover:underline">
             Visit {hostname || "website"} <ExternalLink className="h-4 w-4" />
           </a>
+          <span className="rounded-md bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+            {tool.click_count || 0} referral clicks
+          </span>
+          </div>
           <button
             type="button"
             onClick={() => onToggleUpvote(tool.id)}

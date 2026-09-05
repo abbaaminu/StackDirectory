@@ -7,6 +7,7 @@ import {
   Heart,
 } from "lucide-react";
 import { Tool } from "../types/directory";
+import { handleVisitWebsite } from "../lib/trackToolClick";
 
 const getHostname = (url: string): string | null => {
   try {
@@ -144,7 +145,10 @@ export const ToolCard: React.FC<ToolCardProps> = ({
               href={tool.website_url}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleVisitWebsite(e, tool);
+              }}
               className="text-base text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer transition-colors truncate block"
               title={`Visit ${tool.website_url}`}
             >

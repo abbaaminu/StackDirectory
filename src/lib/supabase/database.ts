@@ -19,6 +19,7 @@ export interface Database {
           pricing_type: "Free" | "Freemium" | "Paid" | "Open Source";
           category: string;
           upvotes: number;
+          click_count: number;
           is_approved: boolean;
           is_featured: boolean;
           status: "pending" | "approved" | "rejected";
@@ -119,6 +120,12 @@ export interface Database {
       };
     };
     Functions: {
+      increment_tool_clicks: {
+        Args: {
+          tool_id: string;
+        };
+        Returns: undefined;
+      };
       toggle_tool_upvote: {
         Args: {
           target_tool_id: string;

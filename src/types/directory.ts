@@ -20,6 +20,7 @@ export interface Tool {
   pricing_type: PricingType;
   category: string;
   upvotes: number;
+  click_count?: number;
   is_approved: boolean;
   is_featured: boolean;
   status?: "pending" | "approved" | "rejected";
