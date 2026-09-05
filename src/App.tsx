@@ -12,6 +12,9 @@ import { AuthModal } from "./components/AuthModal";
 import { AdminQueueModal } from "./components/AdminQueueModal";
 import { getToolSlug, ToolDetailModal } from "./components/ToolDetailModal";
 import { DealRoomModal } from "./components/DealRoomModal";
+import { FAQModal } from "./components/FAQModal";
+import { TermsModal } from "./components/TermsModal";
+import { Footer } from "./components/Footer";
 
 const PRICING_FILTERS: ReadonlyArray<"All" | PricingType> = [
   "All",
@@ -80,6 +83,8 @@ export default function App() {
   // Auth modal (Log In / Sign Up)
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [isFAQOpen, setIsFAQOpen] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
 
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -638,6 +643,13 @@ export default function App() {
           if (tool) void updateAdminTool(toolId, { is_for_sale: !tool.is_for_sale });
         }}
       />}
+
+      <Footer
+        onOpenFAQ={() => setIsFAQOpen(true)}
+        onOpenTerms={() => setIsTermsOpen(true)}
+      />
+      <FAQModal isOpen={isFAQOpen} onClose={() => setIsFAQOpen(false)} />
+      <TermsModal isOpen={isTermsOpen} onClose={() => setIsTermsOpen(false)} />
     </div>
   );
 }
