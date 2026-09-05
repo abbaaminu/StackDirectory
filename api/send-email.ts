@@ -21,7 +21,15 @@ type AppApprovedPayload = {
   toolSlug: string;
 };
 
-type EmailPayload = NewOfferPayload | AppApprovedPayload;
+type SupportMessagePayload = {
+  type: "SUPPORT_MESSAGE";
+  senderName: string;
+  senderEmail: string;
+  category: string;
+  message: string;
+};
+
+type EmailPayload = NewOfferPayload | AppApprovedPayload | SupportMessagePayload;
 
 function collectBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -43,16 +51,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isEmailPayload(value: unknown): value is EmailPayload {
-  if (!isRecord(value) || (value.type !== "NEW_OFFER" && value.type !== "APP_APPROVED")) {
+  if (!isRecord(value) || !["NEW_OFFER", "APP_APPROVED", "SUPPORT_MESSAGE"].includes(String(value.type))) {
     return false;
   }
 
   const requiredStrings = value.type === "NEW_OFFER"
     ? ["toolName", "ownerEmail", "message", "toolSlug"]
-    : ["toolName", "submitterEmail", "toolSlug"];
+    : value.type === "APP_APPROVED"
+      ? ["toolName", "submitterEmail", "toolSlug"]
+      : ["senderName", "senderEmail", "category", "message"];
 
   return requiredStrings.every((key) => typeof value[key] === "string" && value[key].trim()) &&
-    (value.type === "APP_APPROVED" || (typeof value.offerAmount === "number" && Number.isFinite(value.offerAmount)));
+    (value.type !== "NEW_OFFER" || (typeof value.offerAmount === "number" && Number.isFinite(value.offerAmount)));
 }
 
 function escapeHtml(value: string): string {
@@ -94,7 +104,9 @@ export default async function handler(req: EmailRequest, res: ServerResponse) {
     }
 
     const resend = new Resend(apiKey);
-    const listingUrl = `https://apps.stackbuildco.com/?tool=${encodeURIComponent(payload.toolSlug)}`;
+    const listingUrl = payload.type === "NEW_OFFER" || payload.type === "APP_APPROVED"
+      ? `https://apps.stackbuildco.com/?tool=${encodeURIComponent(payload.toolSlug)}`
+      : "";
     const email = payload.type === "NEW_OFFER"
       ? {
           from,
@@ -102,12 +114,20 @@ export default async function handler(req: EmailRequest, res: ServerResponse) {
           subject: `New offer for ${payload.toolName}`,
           html: `<h2>New offer received</h2><p><strong>${escapeHtml(payload.toolName)}</strong> received a new acquisition offer.</p><p><strong>Offer amount:</strong> $${payload.offerAmount.toLocaleString("en-US")}</p><p><strong>Message:</strong> ${escapeHtml(payload.message) || "No message provided."}</p><p><a href="${listingUrl}">Open the deal room</a></p>`,
         }
-      : {
+      : payload.type === "APP_APPROVED"
+        ? {
           from,
           to: payload.submitterEmail,
           subject: `${payload.toolName} is now live on StackDirectory`,
           html: `<h2>Your app has been approved!</h2><p>Congratulations, <strong>${escapeHtml(payload.toolName)}</strong> is now live on StackDirectory.</p><p><a href="${listingUrl}">View your live listing</a></p>`,
-        };
+          }
+        : {
+            from,
+            to: "support@stackbuildco.com",
+            reply_to: payload.senderEmail,
+            subject: `[${payload.category}] Support message from ${payload.senderName}`,
+            html: `<h2>New support message</h2><p><strong>From:</strong> ${escapeHtml(payload.senderName)} (${escapeHtml(payload.senderEmail)})</p><p><strong>Category:</strong> ${escapeHtml(payload.category)}</p><p><strong>Message:</strong></p><p>${escapeHtml(payload.message).replace(/\n/g, "<br />")}</p>`,
+          };
 
     const { error } = await resend.emails.send(email);
     if (error) {

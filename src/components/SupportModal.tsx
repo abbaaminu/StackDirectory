@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Check, Clipboard, Mail, X } from "lucide-react";
+import { Check, Clipboard, LoaderCircle, Mail, X } from "lucide-react";
 
 const SUPPORT_EMAIL = "support@stackbuildco.com";
 
@@ -8,6 +8,13 @@ export const SupportModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
   onClose,
 }) => {
   const [isCopied, setIsCopied] = useState(false);
+  const [senderName, setSenderName] = useState("");
+  const [senderEmail, setSenderEmail] = useState("");
+  const [category, setCategory] = useState("General Support");
+  const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSent, setIsSent] = useState(false);
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
@@ -34,6 +41,39 @@ export const SupportModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
       window.setTimeout(() => setIsCopied(false), 2000);
     } catch {
       setIsCopied(false);
+    }
+  };
+
+  const submitMessage = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setFormError("");
+    if (!senderName.trim() || !senderEmail.trim() || !message.trim()) {
+      setFormError("Please complete your name, email, and message.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "SUPPORT_MESSAGE",
+          senderName: senderName.trim(),
+          senderEmail: senderEmail.trim(),
+          category,
+          message: message.trim(),
+        }),
+      });
+      if (!response.ok) throw new Error("Support request failed");
+      setIsSent(true);
+      setSenderName("");
+      setSenderEmail("");
+      setMessage("");
+    } catch {
+      setFormError("We could not send your message. Please try again or use one of the email options below.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -75,6 +115,29 @@ export const SupportModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
         >
           {SUPPORT_EMAIL}
         </a>
+
+        {isSent ? (
+          <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center text-sm font-semibold text-emerald-300" role="status">
+            Message sent! Our team will reply within 24 hours.
+          </div>
+        ) : (
+          <form onSubmit={submitMessage} className="mt-6 space-y-3">
+            {formError && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300" role="alert">{formError}</p>}
+            <input required value={senderName} onChange={(event) => setSenderName(event.target.value)} placeholder="Name" aria-label="Name" className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-amber-400" />
+            <input required type="email" value={senderEmail} onChange={(event) => setSenderEmail(event.target.value)} placeholder="Email" aria-label="Email" className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-amber-400" />
+            <select value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Category" className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400">
+              <option>General Support</option>
+              <option>App Removal / Update</option>
+              <option>Acquisition Inquiry</option>
+              <option>Report Listing</option>
+            </select>
+            <textarea required rows={4} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Message" aria-label="Message" className="w-full resize-none rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-amber-400" />
+            <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-zinc-950 transition hover:bg-amber-300 disabled:opacity-60">
+              {isSubmitting && <LoaderCircle className="h-4 w-4 animate-spin" />}
+              {isSubmitting ? "Sending..." : "Send Message"}
+            </button>
+          </form>
+        )}
 
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <button
