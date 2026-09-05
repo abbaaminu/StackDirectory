@@ -13,9 +13,11 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenSubmit, onOpenAuth, onOpenAdminQueue, isAuthenticated, user, userEmail, onSignOut }) => {
-  const adminEmail = import.meta.env.VITE_ADMIN_EMAIL?.trim().toLowerCase();
+  const adminEmails = (import.meta.env.VITE_ADMIN_EMAIL || "")
+    .split(",")
+    .map((email: string) => email.trim().toLowerCase());
   const isAdmin = Boolean(
-    isAuthenticated && user?.email && adminEmail && user.email.toLowerCase() === adminEmail,
+    isAuthenticated && user?.email && adminEmails.includes(user.email.toLowerCase()),
   );
 
   return (

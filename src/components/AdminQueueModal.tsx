@@ -33,11 +33,11 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [queueError, setQueueError] = useState<string | null>(null);
   const [updatingToolId, setUpdatingToolId] = useState<string | null>(null);
-  const adminEmail = import.meta.env.VITE_ADMIN_EMAIL?.trim().toLowerCase();
+  const adminEmails = (import.meta.env.VITE_ADMIN_EMAIL || "")
+    .split(",")
+    .map((email: string) => email.trim().toLowerCase());
   const isAdmin = Boolean(
-    user &&
-      (user.app_metadata?.role === "admin" ||
-        (adminEmail && user.email?.toLowerCase() === adminEmail)),
+    user?.email && adminEmails.includes(user.email.toLowerCase()),
   );
 
   useEffect(() => {
