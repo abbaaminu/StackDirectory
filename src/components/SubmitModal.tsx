@@ -297,7 +297,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         paddle.Initialize({
           token: clientToken,
           eventCallback: (event) => {
-            if (event.event_type === "checkout.closed") {
+            if (event.event_type === "checkout.closed" || event.event_type === "checkout.error") {
               setIsProcessingCheckout(false);
               setIsSubmitting(false);
               setShowCheckoutSuccess(false);
@@ -306,7 +306,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         });
         paddle.Checkout.open({
           items: [{ priceId, quantity: 1 }],
-          customer: formData.customer_email ? { email: formData.customer_email } : undefined,
+          customer: { email: formData.customer_email },
           customData: { tool_id: baseTool.id, plan_type: "featured_monthly" },
           settings: { displayMode: "overlay" },
         });
@@ -319,6 +319,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         console.error("Paddle checkout failed:", error);
         setPaymentError(error instanceof Error ? error.message : String(error));
         setIsProcessingCheckout(false);
+        setIsSubmitting(false);
         setErrorMsg("Payment could not be opened. Please check your Paddle configuration and try again.");
       } finally {
         setIsProcessingCheckout(false);
@@ -355,7 +356,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
           </h2>
           <p className="text-xs sm:text-sm text-zinc-400 mt-1">
             Standard directory listings are 100% free. Upgrade to Featured
-            Launch with Paddle ($29 USD/month).
+            Launch with Paddle ($19).
           </p>
         </div>
 
@@ -427,7 +428,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               </p>
             </div>
 
-            {/* Paddle Featured Tier ($29/month) */}
+            {/* Paddle Featured Tier ($19) */}
             <div
               onClick={() =>
                 setFormData({ ...formData, tier: "paddle_featured" })
@@ -445,11 +446,11 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 <div className="flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
                   <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
-                    Paddle Featured
+                    PADDLE FEATURED $19
                   </span>
                 </div>
                 <span className="text-sm font-black text-amber-400 mr-12">
-                  $29/mo
+                  $19
                 </span>
               </div>
               <p className="text-[11px] text-zinc-300 mt-2 leading-relaxed">
@@ -743,7 +744,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               {formData.tier === "paddle_featured" && (
                 <div>
                   <label className="block text-xs font-medium text-amber-300 mb-1 flex items-center gap-1">
-                    <Lock className="w-3 h-3" /> Billing Email (Paddle $29/mo)
+                    <Lock className="w-3 h-3" /> Billing Email (Paddle $19)
                   </label>
                   <input
                     type="email"
@@ -813,7 +814,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                   ) : (
                     <>
                       <CreditCard className="w-3.5 h-3.5" />
-                      <span>Pay $29/mo with Paddle</span>
+                      <span>Pay $19 with Paddle</span>
                     </>
                   )}
                 </button>
