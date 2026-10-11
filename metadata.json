@@ -1,6 +1,6 @@
 {
   "name": "StackDirectory - Startup Marketplace & Discovery",
-  "description": "Discover top developer tools, micro-SaaS apps, and acquire startups for sale with Next.js 15, Supabase, and Paddle.",
+  "description": "Discover top developer tools, micro-SaaS apps, and acquire startups for sale with React, Vite, Supabase, and Paddle.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

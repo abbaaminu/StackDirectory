@@ -10,57 +10,55 @@ import {
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { Tool } from "../types/directory";
-import supabase from "../lib/supabase";
-
-const getToolSlug = (tool: Tool): string =>
-  tool.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || tool.id;
+import supabase, { isSupabaseConfigured } from "../lib/supabase";
+import { isAdminUser } from "../lib/admin";
+import { getToolSlug } from "../lib/toolSlug";
+import { readJsonArray, STORAGE_KEYS, writeJsonArray } from "../lib/localStore";
 
 interface AdminQueueModalProps {
   isOpen: boolean;
   onClose: () => void;
   user?: User | null;
-  tools: Tool[];
-  onToggleFeature: (toolId: string) => void;
-  onToggleForSale: (toolId: string) => void;
+  onSetFeature: (toolId: string, isFeatured: boolean) => void;
+  onSetForSale: (toolId: string, isForSale: boolean) => void;
 }
 
 export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
   isOpen,
   onClose,
   user,
-  tools,
-  onToggleFeature,
-  onToggleForSale,
+  onSetFeature,
+  onSetForSale,
 }) => {
-  const [allTools, setAllTools] = useState<Tool[]>(tools);
+  const [allTools, setAllTools] = useState<Tool[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [queueError, setQueueError] = useState<string | null>(null);
   const [updatingToolId, setUpdatingToolId] = useState<string | null>(null);
-  const adminEmails = (import.meta.env.VITE_ADMIN_EMAIL || "")
-    .split(",")
-    .map((email: string) => email.trim().toLowerCase());
-  const isAdmin = Boolean(
-    user?.email && adminEmails.includes(user.email.toLowerCase()),
-  );
+  // Shared allow-list helper (see lib/admin.ts): the queue must accept exactly
+  // the accounts the header uses to reveal the "Admin Queue" button.
+  const isAdmin = isAdminUser(user);
 
   useEffect(() => {
     if (!isOpen || !isAdmin) return;
 
     let cancelled = false;
     const fetchTools = async () => {
-      if (!supabase) {
-        setQueueError("Supabase is not configured.");
+      setIsLoading(true);
+      setQueueError(null);
+
+      if (!isSupabaseConfigured || !supabase) {
+        // Offline/demo mode: mirror the submissions queued in this browser.
+        if (!cancelled) {
+          setAllTools(readJsonArray<Tool>(STORAGE_KEYS.tools));
+          setIsLoading(false);
+        }
         return;
       }
 
-      setIsLoading(true);
-      setQueueError(null);
       const { data, error } = await supabase
         .from("tools")
         .select("*")
         .order("created_at", { ascending: false });
-
-      console.log("Admin Queue Fetched Tools:", data, "Error:", error);
 
       if (cancelled) return;
       if (error) {
@@ -78,20 +76,30 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
   }, [isAdmin, isOpen]);
 
   const updateQueueTool = async (toolId: string, action: "approve" | "reject") => {
-    if (!supabase) {
-      setQueueError("Supabase is not configured.");
+    setUpdatingToolId(toolId);
+    setQueueError(null);
+
+    // `tools.status` only accepts pending | approved | rejected
+    // (see lib/supabase/database.ts). Writing any other value - "active", for
+    // example - is rejected by the column constraint, and rejecting must also
+    // clear the approval flag so a rejected row can never render as live.
+    const changes = action === "approve"
+      ? { is_approved: true, status: "approved" as const }
+      : { is_approved: false, status: "rejected" as const };
+
+    if (!isSupabaseConfigured || !supabase) {
+      const queued = readJsonArray<Tool>(STORAGE_KEYS.tools).map((tool) =>
+        tool.id === toolId ? { ...tool, ...changes } : tool,
+      );
+      writeJsonArray(STORAGE_KEYS.tools, queued);
+      setAllTools(queued);
+      setUpdatingToolId(null);
       return;
     }
 
-    setUpdatingToolId(toolId);
-    setQueueError(null);
     const { error } = await supabase
       .from("tools")
-      .update(
-        (action === "approve"
-          ? { is_approved: true, status: "active" }
-          : { status: "rejected" }) as never,
-      )
+      .update(changes as never)
       .eq("id", toolId);
 
     if (error) {
@@ -99,13 +107,7 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
     } else {
       const approvedTool = allTools.find((tool) => tool.id === toolId);
       setAllTools((current) => current.map((tool) =>
-        tool.id === toolId
-          ? {
-              ...tool,
-              is_approved: action === "approve" ? true : tool.is_approved,
-              status: action === "approve" ? "approved" : "rejected",
-            }
-          : tool,
+        tool.id === toolId ? { ...tool, ...changes } : tool,
       ));
       const submitterEmail = approvedTool?.seller_contact?.trim();
       if (action === "approve" && approvedTool && submitterEmail) {
@@ -126,8 +128,23 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
     setUpdatingToolId(null);
   };
 
-  if (!isOpen) return null;
+  const handleSetFeature = (tool: Tool) => {
+    const isFeatured = !tool.is_featured;
+    setAllTools((current) => current.map((item) =>
+      item.id === tool.id ? { ...item, is_featured: isFeatured } : item,
+    ));
+    onSetFeature(tool.id, isFeatured);
+  };
 
+  const handleSetForSale = (tool: Tool) => {
+    const isForSale = !tool.is_for_sale;
+    setAllTools((current) => current.map((item) =>
+      item.id === tool.id ? { ...item, is_for_sale: isForSale } : item,
+    ));
+    onSetForSale(tool.id, isForSale);
+  };
+
+  if (!isOpen) return null;
   const pendingTools = allTools.filter((tool) => !tool.is_approved);
   const approvedTools = allTools.filter((tool) => tool.is_approved);
   const featuredTools = allTools.filter((tool) => tool.is_featured);
@@ -257,16 +274,16 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                     </button>
 
                     <button
-                      onClick={() => onToggleFeature(tool.id)}
+                      onClick={() => handleSetFeature(tool)}
                       className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition"
-                      title="Promote to Featured"
+                      title={tool.is_featured ? "Remove featured status" : "Promote to Featured"}
                     >
                       <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
                       <span>Feature</span>
                     </button>
 
                     <button
-                      onClick={() => onToggleForSale(tool.id)}
+                      onClick={() => handleSetForSale(tool)}
                       className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 transition"
                       title="Toggle acquisition listing"
                     >
@@ -277,7 +294,7 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                       onClick={() => void updateQueueTool(tool.id, "reject")}
                       disabled={updatingToolId === tool.id}
                       className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition"
-                      title="Reject / Delete"
+                      title="Reject this submission"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

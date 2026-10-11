@@ -3,6 +3,8 @@ import { CheckCircle2, LockKeyhole, Send, ShieldCheck, X } from "lucide-react";
 import type { Tool } from "../types/directory";
 import supabase, { isSupabaseConfigured } from "../lib/supabase";
 import { sanitizeDealMessage } from "../lib/redact";
+import { getToolSlug } from "../lib/toolSlug";
+import { readJsonArray, STORAGE_KEYS } from "../lib/localStore";
 
 interface DealConversation {
   id: string;
@@ -37,21 +39,12 @@ interface DealRoomModalProps {
   userId: string;
 }
 
-const LOCAL_CONVERSATIONS = "stackdirectory_deal_conversations";
-const LOCAL_MESSAGES = "stackdirectory_deal_messages";
-const LOCAL_OFFERS = "stackdirectory_acquisition_offers";
+const LOCAL_CONVERSATIONS = STORAGE_KEYS.dealConversations;
+const LOCAL_MESSAGES = STORAGE_KEYS.dealMessages;
+const LOCAL_OFFERS = STORAGE_KEYS.acquisitionOffers;
 
-const getToolSlug = (tool: Tool): string =>
-  tool.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || tool.id;
-
-function readLocal<T>(key: string): T[] {
-  try {
-    const value = JSON.parse(localStorage.getItem(key) || "[]");
-    return Array.isArray(value) ? value as T[] : [];
-  } catch {
-    return [];
-  }
-}
+/** Defensive JSON-array reader (see lib/localStore.ts). */
+const readLocal = readJsonArray;
 
 export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, tool, userId }) => {
   const [conversation, setConversation] = useState<DealConversation | null>(null);

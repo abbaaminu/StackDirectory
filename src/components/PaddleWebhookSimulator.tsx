@@ -1,3 +1,8 @@
+/**
+ * SHOWCASE-ONLY: unreferenced by App.tsx. Simulates a Paddle
+ * `transaction.completed` delivery in the browser; the real handler lives in
+ * `api/paddle-webhook.ts` and is now signature-verified.
+ */
 import React, { useState } from "react";
 import {
   X,

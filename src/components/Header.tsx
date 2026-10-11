@@ -1,6 +1,7 @@
 ﻿import React from "react";
 import { LogIn, Plus, UserPlus, LogOut, Shield } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
+import { isAdminUser } from "../lib/admin";
 
 interface HeaderProps {
   onOpenSubmit: () => void;
@@ -13,12 +14,9 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenSubmit, onOpenAuth, onOpenAdminQueue, isAuthenticated, user, userEmail, onSignOut }) => {
-  const adminEmails = (import.meta.env.VITE_ADMIN_EMAIL || "")
-    .split(",")
-    .map((email: string) => email.trim().toLowerCase());
-  const isAdmin = Boolean(
-    isAuthenticated && user?.email && adminEmails.includes(user.email.toLowerCase()),
-  );
+  // Shared allow-list helper (see lib/admin.ts) so the button shows up for
+  // exactly the accounts the review queue will accept.
+  const isAdmin = isAuthenticated && isAdminUser(user);
 
   return (
     <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 w-full">

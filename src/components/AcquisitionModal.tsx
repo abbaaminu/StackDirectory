@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Tool } from "../types/directory";
 import supabase, { isSupabaseConfigured } from "../lib/supabase";
+import { readJsonArray, STORAGE_KEYS, writeJsonArray } from "../lib/localStore";
 
 interface AcquisitionModalProps {
   isOpen: boolean;
@@ -78,11 +79,11 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
           return;
         }
       } else {
-        const existing = JSON.parse(localStorage.getItem("stackdirectory_offers") || "[]") as unknown[];
-        localStorage.setItem("stackdirectory_offers", JSON.stringify([
+        const existing = readJsonArray<unknown>(STORAGE_KEYS.acquisitionOffers);
+        writeJsonArray(STORAGE_KEYS.acquisitionOffers, [
           ...existing,
           { tool_id: tool.id, buyer_name: buyerName.trim(), buyer_email: buyerEmail.trim(), offer_amount: amount, message: message.trim(), status: "pending", created_at: new Date().toISOString() },
-        ]));
+        ]);
       }
 
       setIsSubmitting(false);

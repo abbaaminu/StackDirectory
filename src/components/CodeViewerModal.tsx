@@ -1,3 +1,7 @@
+/**
+ * SHOWCASE-ONLY: unreferenced by App.tsx. Renders the Next.js blueprint
+ * corpus in `src/data/nextjsCodebase.ts` for demonstration purposes.
+ */
 import React, { useState } from "react";
 import {
   X,
@@ -8,11 +12,8 @@ import {
   Code2,
   Layers,
   KeyRound,
-  Download,
-  ExternalLink,
 } from "lucide-react";
 import { CODE_FILES } from "../data/nextjsCodebase";
-import { CodeFile } from "../types/directory";
 
 interface CodeViewerModalProps {
   isOpen: boolean;

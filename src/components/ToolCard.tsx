@@ -1,26 +1,20 @@
 import React, { useState } from "react";
 import {
   ChevronUp,
+  Handshake,
   ShoppingBag,
   Star,
   Heart,
 } from "lucide-react";
 import { Tool } from "../types/directory";
 import { handleVisitWebsite } from "../lib/trackToolClick";
+import { getHostname, getPricingBadgeColor } from "../lib/toolDisplay";
 import { FeaturedBadgeIcon } from "./icons/FeaturedBadgeIcon";
-
-const getHostname = (url: string): string | null => {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return null;
-  }
-};
 
 interface ToolCardProps {
   tool: Tool;
   onToggleUpvote: (toolId: string) => void;
-  onOpenUpgradeForTool?: (tool: Tool) => void;
+  onToggleFavorite?: (toolId: string) => void;
   onOpenAcquisition?: (tool: Tool) => void;
   onOpenDetails?: (tool: Tool) => void;
   onOpenDealRoom?: (tool: Tool) => void;
@@ -29,6 +23,8 @@ interface ToolCardProps {
 export const ToolCard: React.FC<ToolCardProps> = ({
   tool,
   onToggleUpvote,
+  onToggleFavorite,
+  onOpenAcquisition,
   onOpenDetails,
   onOpenDealRoom,
 }) => {
@@ -51,21 +47,6 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     setIsUpvoteAnimating(true);
     onToggleUpvote(tool.id);
     setTimeout(() => setIsUpvoteAnimating(false), 300);
-  };
-
-  const getPricingBadgeColor = (type: string) => {
-    switch (type) {
-      case "Free":
-        return "bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold px-2 py-0.5 rounded-md uppercase";
-      case "Freemium":
-        return "bg-cyan-50 text-cyan-700 border border-cyan-200 text-[11px] font-bold px-2 py-0.5 rounded-md uppercase";
-      case "Open Source":
-        return "bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200 text-[11px] font-bold px-2 py-0.5 rounded-md uppercase";
-      case "Paid":
-        return "bg-amber-50 text-amber-800 border border-amber-300 text-[11px] font-bold px-2 py-0.5 rounded-md uppercase";
-      default:
-        return "bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-bold px-2 py-0.5 rounded-md uppercase";
-    }
   };
 
   return (
@@ -147,7 +128,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
               rel="noopener noreferrer"
               onClick={(e) => {
                 e.stopPropagation();
-                handleVisitWebsite(e, tool);
+                handleVisitWebsite(tool);
               }}
               className="text-base text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer transition-colors truncate block"
               title={`Visit ${tool.website_url}`}
@@ -177,6 +158,16 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           <span className={getPricingBadgeColor(tool.pricing_type)}>
             {tool.pricing_type}
           </span>
+          {tool.is_for_sale && onOpenAcquisition && (
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); onOpenAcquisition(tool); }}
+              className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-0.5 text-[11px] font-bold text-white hover:bg-emerald-500"
+            >
+              <Handshake className="h-3 w-3" />
+              Make Offer
+            </button>
+          )}
           {tool.is_for_sale && onOpenDealRoom && (
             <button
               type="button"
@@ -192,9 +183,13 @@ export const ToolCard: React.FC<ToolCardProps> = ({
       {/* Right Action: Bookmark / Favorite (Top Corner) */}
       <button
         type="button"
-              onClick={(e) => e.stopPropagation()}
-        title={tool.is_favorite ? "Remove from favorites" : "Add to favorites"}
-        aria-label={tool.is_favorite ? "Remove from favorites" : "Add to favorites"}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleFavorite?.(tool.id);
+        }}
+        title={tool.is_favorite ? "Remove from favorites" : "Save to favorites"}
+        aria-label={tool.is_favorite ? "Remove from favorites" : "Save to favorites"}
+        aria-pressed={Boolean(tool.is_favorite)}
         className="shrink-0 ml-auto mt-0.5"
       >
         <Heart

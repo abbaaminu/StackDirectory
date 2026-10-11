@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { IncomingMessage, ServerResponse } from "http";
 
@@ -9,6 +10,11 @@ type WebhookRequest = IncomingMessage & {
  * Paddle Webhook Handler — Vercel Serverless Function
  *
  * Endpoint: POST /api/paddle-webhook
+ *
+ * Every request must carry Paddle's `Paddle-Signature` header: it is verified
+ * against `PADDLE_WEBHOOK_SECRET_KEY` (HMAC-SHA256 over `ts:rawBody`) before the
+ * body is trusted, so a forged `transaction.completed` cannot feature a listing.
+ * In production a missing secret fails closed.
  *
  * On a `transaction.completed` event, reads `custom_data.tool_id` (or the
  * top-level `tool_id`) passed at checkout time and upgrades that tool in
@@ -149,6 +155,68 @@ function collectBody(req: IncomingMessage): Promise<string> {
   });
 }
 
+/** Paddle sends `Paddle-Signature: ts=<unix>;h1=<hex hmac>[;h1=…]`. */
+function parsePaddleSignature(header: string | undefined): {
+  timestamp: string;
+  signatures: string[];
+} | null {
+  if (!header) return null;
+
+  let timestamp = "";
+  const signatures: string[] = [];
+
+  for (const segment of header.split(";")) {
+    const separatorIndex = segment.indexOf("=");
+    if (separatorIndex === -1) continue;
+    const key = segment.slice(0, separatorIndex).trim();
+    const value = segment.slice(separatorIndex + 1).trim();
+    if (!value) continue;
+    if (key === "ts") timestamp = value;
+    else if (key === "h1") signatures.push(value.toLowerCase());
+  }
+
+  return timestamp && signatures.length ? { timestamp, signatures } : null;
+}
+
+/** Rejects replayed payloads: the signed timestamp must be recent. */
+function isFreshSignature(timestamp: string, toleranceSeconds = 300): boolean {
+  const parsed = Number(timestamp);
+  if (!Number.isFinite(parsed)) return false;
+  // Tolerate millisecond timestamps in addition to Paddle's seconds.
+  const seconds = parsed > 1_000_000_000_000 ? parsed / 1000 : parsed;
+  return Math.abs(Date.now() / 1000 - seconds) <= toleranceSeconds;
+}
+
+/**
+ * Verifies Paddle's HMAC-SHA256 webhook signature over the raw body
+ * (`HMAC(ts + ":" + rawBody)`, keyed with the notification destination secret).
+ *
+ * Exported so the verification logic can be exercised by tests without a live
+ * Paddle account.
+ */
+export function verifyPaddleSignature(
+  rawBody: string,
+  header: string | undefined,
+  secret: string,
+): boolean {
+  const parsed = parsePaddleSignature(header);
+  if (!parsed || !secret || !rawBody) return false;
+  if (!isFreshSignature(parsed.timestamp)) return false;
+
+  const expected = createHmac("sha256", secret)
+    .update(`${parsed.timestamp}:${rawBody}`)
+    .digest("hex");
+  const expectedBuffer = Buffer.from(expected, "utf8");
+
+  return parsed.signatures.some((signature) => {
+    const provided = Buffer.from(signature, "utf8");
+    return (
+      provided.length === expectedBuffer.length &&
+      timingSafeEqual(provided, expectedBuffer)
+    );
+  });
+}
+
 export default async function handler(
   req: WebhookRequest,
   res: ServerResponse,
@@ -162,11 +230,47 @@ export default async function handler(
   }
 
   try {
-    // Vercel may provide a parsed body; fall back to reading the raw stream.
+    // Signature verification needs the exact bytes Paddle signed, so the raw
+    // stream is always read first. A pre-parsed body is only used when the
+    // stream has already been consumed upstream.
+    const rawBody = typeof req.body === "string" ? req.body : await collectBody(req);
     const payload: PaddleWebhookPayload =
       req.body && typeof req.body === "object"
         ? (req.body as PaddleWebhookPayload)
-        : JSON.parse((await collectBody(req)) || "{}");
+        : JSON.parse(rawBody || "{}");
+
+    // 1. Authenticate the caller.
+    //    Without this, anyone who found the endpoint could POST a fabricated
+    //    `transaction.completed` event and have any listing approved+featured.
+    const webhookSecret = process.env.PADDLE_WEBHOOK_SECRET_KEY?.trim() ?? "";
+    const signatureHeader = req.headers["paddle-signature"];
+    const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
+
+    if (!webhookSecret) {
+      if (process.env.NODE_ENV === "production") {
+        console.error(
+          "[Paddle Webhook] PADDLE_WEBHOOK_SECRET_KEY is not configured - refusing unverifiable webhook.",
+        );
+        res.statusCode = 500;
+        res.setHeader("Content-Type", "application/json");
+        res.end(
+          JSON.stringify({
+            success: false,
+            error: "Webhook signature verification is not configured.",
+          }),
+        );
+        return;
+      }
+      console.warn(
+        "[Paddle Webhook] PADDLE_WEBHOOK_SECRET_KEY is not set - skipping signature verification (development only).",
+      );
+    } else if (!verifyPaddleSignature(rawBody, signature, webhookSecret)) {
+      console.warn("[Paddle Webhook] Rejected webhook with a missing or invalid signature.");
+      res.statusCode = 401;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ success: false, error: "Invalid webhook signature" }));
+      return;
+    }
 
     const { event_type, data } = payload;
 
@@ -202,12 +306,15 @@ export default async function handler(
     }
 
     // 4. Build a server-side Supabase admin client using the Service Role Key
-    const supabaseUrl = process.env.VITE_SUPABASE_URL ?? "";
+    //    SUPABASE_URL is the canonical server-side name; the VITE_ name is
+    //    accepted so one deployment variable can serve both runtimes.
+    const supabaseUrl =
+      process.env.SUPABASE_URL?.trim() || process.env.VITE_SUPABASE_URL?.trim() || "";
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
     if (!supabaseUrl || !serviceRoleKey) {
       console.error(
-        "[Paddle Webhook] Missing SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_URL environment variables.",
+        "[Paddle Webhook] Missing SUPABASE_SERVICE_ROLE_KEY / SUPABASE_URL (or VITE_SUPABASE_URL) environment variables.",
       );
       res.statusCode = 500;
       res.setHeader("Content-Type", "application/json");
@@ -230,15 +337,42 @@ export default async function handler(
     // 5. Update the tool: approve + feature it (bypasses RLS via service role).
     //    `.select(...)` echoes the updated row so the receipt can quote the real
     //    submission details without a second query.
-    const { data: updatedRows, error } = await supabaseAdmin
+    //    `tools.status` is constrained to pending | approved | rejected (see
+    //    src/lib/supabase/database.ts) - writing "active" fails the column
+    //    constraint and would abort the whole upgrade.
+    const featuredUpgrade = {
+      is_approved: true,
+      is_featured: true,
+      status: "approved" as const,
+    };
+    const matchingValue = toolId.trim();
+    const customWebsiteUrl =
+      typeof customData.website_url === "string" ? customData.website_url.trim() : "";
+
+    let { data: updatedRows, error } = await supabaseAdmin
       .from("tools")
-      .update({
-        is_approved: true,
-        is_featured: true,
-        status: "active",
-      } as never)
-      .eq("id", toolId.trim())
+      .update(featuredUpgrade as never)
+      .eq("id", matchingValue)
       .select("id, name, category, pricing_type, website_url");
+
+    const matchedRowCount = Array.isArray(updatedRows)
+      ? updatedRows.length
+      : updatedRows
+        ? 1
+        : 0;
+
+    if (!error && matchedRowCount === 0 && customWebsiteUrl) {
+      // Legacy or mismatched custom_data: retry against the listing URL so a
+      // buyer who paid is never left without the upgrade.
+      console.warn(
+        `[Paddle Webhook] No tool row matched id "${matchingValue}" - retrying by website_url.`,
+      );
+      ({ data: updatedRows, error } = await supabaseAdmin
+        .from("tools")
+        .update(featuredUpgrade as never)
+        .eq("website_url", customWebsiteUrl)
+        .select("id, name, category, pricing_type, website_url"));
+    }
 
     if (error) {
       console.error("[Paddle Webhook] Database update failed:", error.message);

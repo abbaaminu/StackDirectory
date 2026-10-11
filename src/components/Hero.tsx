@@ -1,3 +1,9 @@
+/**
+ * SHOWCASE-ONLY: this hero/controls block is not mounted by App.tsx (the live
+ * directory renders its own header, filters and grid). It is kept as a
+ * reference implementation - wire it into App.tsx or delete it, but do not
+ * treat it as live UI.
+ */
 import React from "react";
 import {
   Search,

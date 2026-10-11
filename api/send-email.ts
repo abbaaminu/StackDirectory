@@ -233,7 +233,10 @@ export default async function handler(req: EmailRequest, res: ServerResponse) {
         : {
             from,
             to: "support@stackbuildco.com",
-            reply_to: payload.senderEmail,
+            // The Resend SDK maps camelCase `replyTo` onto the API's `reply_to`
+            // field; passing `reply_to` here would be silently dropped and
+            // support replies would go to the sending address instead.
+            replyTo: payload.senderEmail,
             subject: `[${payload.category}] Support message from ${payload.senderName}`,
             html: `<h2>New support message</h2><p><strong>From:</strong> ${escapeHtml(payload.senderName)} (${escapeHtml(payload.senderEmail)})</p><p><strong>Category:</strong> ${escapeHtml(payload.category)}</p><p><strong>Message:</strong></p><p>${escapeHtml(payload.message).replace(/\n/g, "<br />")}</p>`,
           };

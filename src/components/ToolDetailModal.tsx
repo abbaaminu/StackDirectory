@@ -1,31 +1,26 @@
 import React, { useEffect, useState } from "react";
-import { Check, ChevronUp, Copy, ExternalLink, Share2, X } from "lucide-react";
+import { Check, ChevronUp, Copy, ExternalLink, Handshake, Heart, Share2, X } from "lucide-react";
 import type { Tool } from "../types/directory";
 import { handleVisitWebsite } from "../lib/trackToolClick";
+import { getHostname } from "../lib/toolDisplay";
+import { getToolSlug } from "../lib/toolSlug";
 
 interface ToolDetailModalProps {
   isOpen: boolean;
   tool: Tool | null;
   onClose: () => void;
   onToggleUpvote: (toolId: string) => void;
+  onToggleFavorite?: (toolId: string) => void;
+  onOpenAcquisition?: (tool: Tool) => void;
 }
-
-const getHostname = (url: string): string => {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return "";
-  }
-};
-
-export const getToolSlug = (tool: Tool): string =>
-  tool.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || tool.id;
 
 export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
   isOpen,
   tool,
   onClose,
   onToggleUpvote,
+  onToggleFavorite,
+  onOpenAcquisition,
 }) => {
   const [logoSource, setLogoSource] = useState("");
   const [logoFailed, setLogoFailed] = useState(false);
@@ -35,7 +30,7 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
 
   useEffect(() => {
     if (tool) {
-      const hostname = getHostname(tool.website_url);
+      const hostname = getHostname(tool.website_url) ?? "";
       setLogoSource(tool.icon_url || `https://icon.horse/icon/${hostname}`);
       setLogoFailed(false);
       setIsCopied(false);
@@ -44,7 +39,7 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
     }
   }, [tool]);
 
-  const toolSlug = tool ? (tool as Tool & { slug?: string }).slug || tool.id : "";
+  const toolSlug = tool ? (tool as Tool & { slug?: string }).slug || getToolSlug(tool) : "";
   const shareUrl = `https://apps.stackbuildco.com/?tool=${encodeURIComponent(toolSlug)}`;
   const ogImageUrl = tool
     ? `https://apps.stackbuildco.com/api/og?title=${encodeURIComponent(tool.name)}&tagline=${encodeURIComponent(tool.tagline)}&category=${encodeURIComponent(tool.category)}&pricing=${encodeURIComponent(tool.pricing_type)}`
@@ -79,7 +74,7 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
 
   if (!isOpen || !tool) return null;
 
-  const hostname = getHostname(tool.website_url);
+  const hostname = getHostname(tool.website_url) ?? "";
   const fallback = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
   const shareTitle = `${tool.name} - StackDirectory`;
   const shareText = `Check out ${tool.name} on StackDirectory!`;
@@ -122,6 +117,16 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
         <div className="absolute right-4 top-4 flex items-center gap-1">
           <button
             type="button"
+            onClick={() => onToggleFavorite?.(tool.id)}
+            aria-pressed={Boolean(tool.is_favorite)}
+            aria-label={tool.is_favorite ? "Remove from favorites" : "Save to favorites"}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-bold transition hover:bg-slate-100 ${tool.is_favorite ? "text-rose-600" : "text-slate-600 hover:text-slate-900"}`}
+          >
+            <Heart className={`h-4 w-4 ${tool.is_favorite ? "fill-rose-600" : ""}`} />
+            <span className="hidden sm:inline">{tool.is_favorite ? "Saved" : "Save"}</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setIsShareMenuOpen((current) => !current)}
             aria-label="Share listing"
             className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
@@ -158,7 +163,7 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
               </svg>
             ) : (
               <img
-                src={logoSource}
+                src={logoSource || undefined}
                 alt={`${tool.name} logo`}
                 className="h-full w-full object-cover"
                 onError={() => {
@@ -229,13 +234,23 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
 
         <div className="mt-7 flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-3">
-          <a href={tool.website_url} target="_blank" rel="noopener noreferrer" onClick={(event) => handleVisitWebsite(event, tool)} className="inline-flex items-center gap-2 text-sm font-bold text-emerald-600 hover:underline">
+          <a href={tool.website_url} target="_blank" rel="noopener noreferrer" onClick={() => handleVisitWebsite(tool)} className="inline-flex items-center gap-2 text-sm font-bold text-emerald-600 hover:underline">
             Visit {hostname || "website"} <ExternalLink className="h-4 w-4" />
           </a>
           <span className="rounded-md bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
             {tool.click_count || 0} referral clicks
           </span>
           </div>
+          {tool.is_for_sale && onOpenAcquisition && (
+            <button
+              type="button"
+              onClick={() => onOpenAcquisition(tool)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500"
+            >
+              <Handshake className="h-4 w-4" />
+              Make an Offer
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onToggleUpvote(tool.id)}

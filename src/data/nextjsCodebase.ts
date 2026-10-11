@@ -1,3 +1,9 @@
+/**
+ * SHOWCASE-ONLY corpus: static Next.js 15 blueprint snippets for the "Production
+ * Codebase" viewer. These strings are display data, not application code - they
+ * intentionally keep the Next.js `NEXT_PUBLIC_*` naming. The live app is React +
+ * Vite and reads `import.meta.env.VITE_*` (see src/vite-env.d.ts).
+ */
 import { CodeFile } from "../types/directory";
 
 export const CODE_FILES: CodeFile[] = [

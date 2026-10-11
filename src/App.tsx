@@ -3,8 +3,22 @@ import { Search, X, CheckCircle2, ShoppingBag, LayoutGrid, ArrowUpDown, Clock, T
 import supabase, { isSupabaseConfigured, pendingToolDefaults } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import type { PricingType, SortOption, Tool } from "./types/directory";
-import { ALL_CATEGORIES, SORT_OPTIONS } from "./types/directory";
+import {
+  ALL_CATEGORIES,
+  PRICING_FILTER_OPTIONS,
+  SORT_OPTIONS,
+} from "./types/directory";
 import { buildCategoryOptions, matchesToolFilters, sortTools } from "./lib/toolFilters";
+import { isAdminUser } from "./lib/admin";
+import { getToolSlug } from "./lib/toolSlug";
+import { buildToolInsertRow } from "./lib/submissions";
+import {
+  readJsonArray,
+  readStringArray,
+  STORAGE_KEYS,
+  writeJsonArray,
+  writeStringArray,
+} from "./lib/localStore";
 import { INITIAL_TOOLS } from "./data/mockTools";
 import { Header } from "./components/Header";
 import { ToolCard, ToolCardSkeleton } from "./components/ToolCard";
@@ -12,7 +26,7 @@ import { SubmitModal } from "./components/SubmitModal";
 import { AcquisitionModal } from "./components/AcquisitionModal";
 import { AuthModal } from "./components/AuthModal";
 import { AdminQueueModal } from "./components/AdminQueueModal";
-import { getToolSlug, ToolDetailModal } from "./components/ToolDetailModal";
+import { ToolDetailModal } from "./components/ToolDetailModal";
 import { DealRoomModal } from "./components/DealRoomModal";
 import { FAQModal } from "./components/FAQModal";
 import { TermsModal } from "./components/TermsModal";
@@ -20,17 +34,7 @@ import { Footer } from "./components/Footer";
 import { SupportModal } from "./components/SupportModal";
 import { FeaturedBadgeIcon } from "./components/icons/FeaturedBadgeIcon";
 
-const PRICING_FILTERS: ReadonlyArray<"All" | PricingType> = [
-  "All",
-  "Free",
-  "Freemium",
-  "Paid",
-];
-
 type ViewMode = "all" | "for_sale";
-
-const VOTED_TOOLS_KEY = "voted_tools";
-const LOCAL_TOOLS_KEY = "stackdirectory_tools";
 
 const getToolFromUrl = (toolParam: string, availableTools: Tool[]): Tool | null => {
   const normalizedParam = toolParam.toLowerCase();
@@ -41,29 +45,10 @@ const getToolFromUrl = (toolParam: string, availableTools: Tool[]): Tool | null 
   ) ?? null;
 };
 
-const getVotedTools = (): string[] => {
-  try {
-    const raw = localStorage.getItem(VOTED_TOOLS_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveVotedTools = (ids: string[]) => {
-  try {
-    localStorage.setItem(VOTED_TOOLS_KEY, JSON.stringify(ids));
-  } catch {
-    // ignore storage failures (e.g. quota / private mode)
-  }
-};
-
 export default function App() {
   const [tools, setTools] = useState<Tool[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [localAuthenticated, setLocalAuthenticated] = useState(false);
-  const [adminTools, setAdminTools] = useState<Tool[]>([]);
   const [isAdminQueueOpen, setIsAdminQueueOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,16 +109,13 @@ export default function App() {
     try {
       setLoading(true);
       if (!isSupabaseConfigured || !supabase) {
-        let stored: Tool[] = [];
-        try {
-          const parsed = JSON.parse(localStorage.getItem(LOCAL_TOOLS_KEY) || "[]");
-          stored = Array.isArray(parsed) ? parsed : [];
-        } catch {
-          stored = [];
-        }
+        const stored = readJsonArray<Tool>(STORAGE_KEYS.tools);
+        const votedIds = readStringArray(STORAGE_KEYS.votedTools);
+        const savedIds = readStringArray(STORAGE_KEYS.savedTools);
         setTools([...INITIAL_TOOLS, ...stored].map((tool) => ({
           ...tool,
-          user_has_upvoted: getVotedTools().includes(tool.id),
+          user_has_upvoted: votedIds.includes(tool.id),
+          is_favorite: savedIds.includes(tool.id),
         })));
         setError(null);
         return;
@@ -150,11 +132,14 @@ export default function App() {
         return;
       }
 
+      const votedIds = readStringArray(STORAGE_KEYS.votedTools);
+      const savedIds = readStringArray(STORAGE_KEYS.savedTools);
       setTools(
         ((data as Tool[]) ?? []).map((tool) => ({
           ...tool,
-          // Restore persistent upvote state across page reloads
-          user_has_upvoted: getVotedTools().includes(tool.id),
+          // Restore persistent upvote / bookmark state across page reloads
+          user_has_upvoted: votedIds.includes(tool.id),
+          is_favorite: savedIds.includes(tool.id),
         })) ?? [],
       );
     } catch (err) {
@@ -184,44 +169,17 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const isAdmin = Boolean(
-    session?.user.app_metadata?.role === "admin" ||
-      (session?.user.email &&
-        [
-          ...(import.meta.env.VITE_ADMIN_EMAILS ?? "")
-            .split(",")
-            .map((email: string) => email.trim().toLowerCase()),
-          import.meta.env.VITE_ADMIN_EMAIL?.trim().toLowerCase(),
-        ]
-          .filter(Boolean)
-          .includes(session.user.email.toLowerCase())),
-  );
-
-  const openAdminQueue = async () => {
-    if (!isAdmin) {
-      showToast("Admin access is restricted to authorized accounts.");
-      return;
-    }
-    if (!isSupabaseConfigured || !supabase) {
-      const stored = JSON.parse(localStorage.getItem(LOCAL_TOOLS_KEY) || "[]") as Tool[];
-      setAdminTools(stored);
-    } else {
-      const { data, error } = await supabase.from("tools").select("*").order("created_at", { ascending: false });
-      if (error) {
-        showToast("Could not load the review queue.");
-        return;
-      }
-      setAdminTools((data as Tool[]) ?? []);
-    }
-    setIsAdminQueueOpen(true);
-  };
+/** True for Supabase users whose email is allow-listed or whose
+ *  `app_metadata.role` is `"admin"`. The review queue is only mounted for
+ *  admins, and it re-checks internally (see lib/admin.ts). */
+  const isAdmin = isAdminUser(session?.user);
 
   const updateAdminTool = async (toolId: string, updates: Partial<Tool>) => {
     if (!isSupabaseConfigured || !supabase) {
-      const stored = JSON.parse(localStorage.getItem(LOCAL_TOOLS_KEY) || "[]") as Tool[];
-      const next = stored.map((tool) => tool.id === toolId ? { ...tool, ...updates } : tool);
-      localStorage.setItem(LOCAL_TOOLS_KEY, JSON.stringify(next));
-      setAdminTools(next);
+      const next = readJsonArray<Tool>(STORAGE_KEYS.tools).map((tool) =>
+        tool.id === toolId ? { ...tool, ...updates } : tool,
+      );
+      writeJsonArray(STORAGE_KEYS.tools, next);
       await fetchApprovedTools();
       return;
     }
@@ -230,7 +188,6 @@ export default function App() {
       showToast("Could not update this listing.");
       return;
     }
-    setAdminTools((current) => current.map((tool) => tool.id === toolId ? { ...tool, ...updates } : tool));
     await fetchApprovedTools();
   };
 
@@ -242,33 +199,19 @@ export default function App() {
 
   // Submit a new tool into Supabase (goes to review queue with is_approved = false)
   const handleSubmitTool = async (newTool: Tool) => {
-    const row = {
-      name: newTool.name,
-      tagline: newTool.tagline,
-      description: newTool.description,
-      website_url: newTool.website_url,
-      pricing_type: newTool.pricing_type,
-      category: newTool.category,
-      upvotes: newTool.upvotes ?? 0,
-      ...pendingToolDefaults,
-      is_featured: newTool.is_featured ?? false,
-      paddle_customer_id: newTool.paddle_customer_id ?? null,
-      is_for_sale: newTool.is_for_sale ?? false,
-      asking_price: newTool.asking_price ?? null,
-      monthly_revenue: newTool.monthly_revenue ?? 0,
-      monthly_profit: newTool.monthly_profit ?? 0,
-      seller_contact: newTool.seller_contact ?? null,
-      tech_stack: newTool.tech_stack ?? [],
-    };
+    // The client-generated id is persisted explicitly: the Paddle webhook
+    // upgrades the row whose id matches custom_data.tool_id
+    // (see lib/submissions.ts).
+    const row = buildToolInsertRow(newTool);
 
     const saveSubmissionLocally = async () => {
       try {
-        const parsed = JSON.parse(localStorage.getItem(LOCAL_TOOLS_KEY) || "[]");
-        const existing = Array.isArray(parsed) ? parsed as Tool[] : [];
-        localStorage.setItem(LOCAL_TOOLS_KEY, JSON.stringify([
-          ...existing,
+        const queued = readJsonArray<Tool>(STORAGE_KEYS.tools);
+        const persisted = writeJsonArray(STORAGE_KEYS.tools, [
+          ...queued,
           { ...newTool, ...pendingToolDefaults },
-        ]));
+        ]);
+        if (!persisted) throw new Error("Local storage is unavailable.");
         showToast(`📋 "${newTool.name}" saved locally for review.`);
         await fetchApprovedTools();
       } catch {
@@ -310,9 +253,12 @@ export default function App() {
 
     if (!isSupabaseConfigured || !supabase) {
       const nextUpvotes = tool.user_has_upvoted ? Math.max(0, tool.upvotes - 1) : tool.upvotes + 1;
-      const votedTools = getVotedTools();
+      const votedTools = readStringArray(STORAGE_KEYS.votedTools);
       const isUpvoting = !tool.user_has_upvoted;
-      saveVotedTools(isUpvoting ? [...new Set([...votedTools, toolId])] : votedTools.filter((id) => id !== toolId));
+      writeStringArray(
+        STORAGE_KEYS.votedTools,
+        isUpvoting ? [...new Set([...votedTools, toolId])] : votedTools.filter((id) => id !== toolId),
+      );
       setTools((prev) => prev.map((item) => item.id === toolId ? { ...item, upvotes: nextUpvotes, user_has_upvoted: isUpvoting } : item));
       setSelectedDetailTool((current) => current?.id === toolId ? { ...current, upvotes: nextUpvotes, user_has_upvoted: isUpvoting } : current);
       showToast(isUpvoting ? "Upvote added." : "Upvote removed.");
@@ -331,9 +277,9 @@ export default function App() {
     }
 
     const result = data as { voted: boolean; upvotes: number } | null;
-    const votedTools = getVotedTools();
-    if (result?.voted) saveVotedTools([...new Set([...votedTools, toolId])]);
-    else saveVotedTools(votedTools.filter((id) => id !== toolId));
+    const votedTools = readStringArray(STORAGE_KEYS.votedTools);
+    if (result?.voted) writeStringArray(STORAGE_KEYS.votedTools, [...new Set([...votedTools, toolId])]);
+    else writeStringArray(STORAGE_KEYS.votedTools, votedTools.filter((id) => id !== toolId));
 
     setTools((prev) =>
       prev.map((t) =>
@@ -358,7 +304,25 @@ export default function App() {
     showToast(result?.voted ? "Upvote added." : "Upvote removed.");
   };
 
-  // Listings inside the active All Apps / For Sale tab — drives category counts
+  // Bookmarks are device-scoped (see lib/localStore.ts) and are applied to the
+  // loaded listings so the card heart and the toast stay in sync.
+  const handleToggleFavorite = (toolId: string) => {
+    const savedIds = readStringArray(STORAGE_KEYS.savedTools);
+    const isSaving = !savedIds.includes(toolId);
+    writeStringArray(
+      STORAGE_KEYS.savedTools,
+      isSaving ? [...savedIds, toolId] : savedIds.filter((id) => id !== toolId),
+    );
+    setTools((prev) =>
+      prev.map((tool) => (tool.id === toolId ? { ...tool, is_favorite: isSaving } : tool)),
+    );
+    setSelectedDetailTool((current) =>
+      current?.id === toolId ? { ...current, is_favorite: isSaving } : current,
+    );
+    showToast(isSaving ? "Saved to your favorites." : "Removed from your favorites.");
+  };
+
+  // Listings inside the active All Apps / For Sale tab - drives category counts
   const viewScopedTools = tools.filter(
     (tool) => viewMode !== "for_sale" || tool.is_for_sale,
   );
@@ -458,7 +422,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500 font-medium">Pricing:</span>
             <div className="flex flex-wrap gap-1.5">
-              {PRICING_FILTERS.map((filter) => (
+              {PRICING_FILTER_OPTIONS.map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setPricingFilter(filter)}
@@ -624,6 +588,7 @@ export default function App() {
                   key={tool.id}
                   tool={tool}
                   onToggleUpvote={handleToggleUpvote}
+                  onToggleFavorite={handleToggleFavorite}
                   onOpenAcquisition={(t) => setSelectedAcquisitionTool(t)}
                   onOpenDetails={openToolDetails}
                   onOpenDealRoom={(t) => setSelectedDealRoomTool(t)}
@@ -715,6 +680,11 @@ export default function App() {
         tool={selectedDetailTool}
         onClose={closeToolDetails}
         onToggleUpvote={(toolId) => void handleToggleUpvote(toolId)}
+        onToggleFavorite={handleToggleFavorite}
+        onOpenAcquisition={(tool) => {
+          setSelectedDetailTool(null);
+          setSelectedAcquisitionTool(tool);
+        }}
       />
 
       {isAuthenticated && <DealRoomModal
@@ -733,19 +703,12 @@ export default function App() {
         onToast={showToast}
       />
 
-      {isAuthenticated && <AdminQueueModal
+      {isAuthenticated && isAdmin && <AdminQueueModal
         isOpen={isAdminQueueOpen}
         onClose={() => setIsAdminQueueOpen(false)}
         user={session?.user}
-        tools={adminTools}
-        onToggleFeature={(toolId) => {
-          const tool = adminTools.find((item) => item.id === toolId);
-          if (tool) void updateAdminTool(toolId, { is_featured: !tool.is_featured });
-        }}
-        onToggleForSale={(toolId) => {
-          const tool = adminTools.find((item) => item.id === toolId);
-          if (tool) void updateAdminTool(toolId, { is_for_sale: !tool.is_for_sale });
-        }}
+        onSetFeature={(toolId, isFeatured) => void updateAdminTool(toolId, { is_featured: isFeatured })}
+        onSetForSale={(toolId, isForSale) => void updateAdminTool(toolId, { is_for_sale: isForSale })}
       />}
 
       <Footer

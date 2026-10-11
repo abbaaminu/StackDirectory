@@ -99,7 +99,7 @@ export const FAQModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
           </div>
 
           <a
-            href="mailto:support@support@stackbuildco.com"
+            href="mailto:support@stackbuildco.com"
             className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-zinc-950 transition hover:bg-amber-300"
           >
             <Mail className="h-4 w-4" />

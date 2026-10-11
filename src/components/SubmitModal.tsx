@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { PricingType, SubmissionFormState, Tool } from "../types/directory";
 import { CATEGORIES } from "../data/mockTools";
+import { createToolId } from "../lib/submissions";
+import { getToolSlug } from "../lib/toolSlug";
 
 interface SubmitModalProps {
   isOpen: boolean;
@@ -206,7 +208,9 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       normalizedUrl = `https://${normalizedUrl}`;
     }
 
-    const toolId = `tool_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+    // Shared with the Paddle payload below: the webhook upgrades the row whose
+    // id matches custom_data.tool_id (see lib/submissions.ts).
+    const toolId = createToolId();
 
     // Parse tech stack array
     const parsedTechStack = formData.tech_stack
@@ -297,7 +301,18 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         paddle.Checkout.open({
           items: [{ priceId, quantity: 1 }],
           customer: (formData.customer_email) ? { email: formData.customer_email || "" } : undefined,
-          customData: { tool_id: baseTool.id, plan_type: "featured_monthly" },
+          // Every value is a string - Paddle rejects nested or non-string
+          // custom_data. tool_name / tool_slug / website_url / customer_email
+          // are the fallbacks api/paddle-webhook.ts uses when it cannot read the
+          // row by id.
+          customData: {
+            tool_id: baseTool.id,
+            plan_type: "featured_listing",
+            tool_name: baseTool.name,
+            tool_slug: getToolSlug(baseTool),
+            website_url: baseTool.website_url,
+            customer_email: formData.customer_email?.trim() || "",
+          },
           settings: { displayMode: "overlay" },
         });
         checkoutOpened = true;
