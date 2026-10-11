@@ -3,6 +3,7 @@ import {
   X,
   ShieldCheck,
   Check,
+  XCircle,
   Trash2,
   Zap,
   ExternalLink,
@@ -12,8 +13,10 @@ import type { User } from "@supabase/supabase-js";
 import { Tool } from "../types/directory";
 import supabase, { isSupabaseConfigured } from "../lib/supabase";
 import { isAdminUser } from "../lib/admin";
+import { callAdminToolAction, isAdminApiUnavailable } from "../lib/adminTools";
 import { getToolSlug } from "../lib/toolSlug";
 import { readJsonArray, STORAGE_KEYS, writeJsonArray } from "../lib/localStore";
+import { useModalDismiss } from "../lib/useModalDismiss";
 
 interface AdminQueueModalProps {
   isOpen: boolean;
@@ -21,6 +24,8 @@ interface AdminQueueModalProps {
   user?: User | null;
   onSetFeature: (toolId: string, isFeatured: boolean) => void;
   onSetForSale: (toolId: string, isForSale: boolean) => void;
+  /** Lets App drop a deleted listing from the directory grid immediately. */
+  onToolDeleted?: (toolId: string) => void;
 }
 
 export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
@@ -29,14 +34,23 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
   user,
   onSetFeature,
   onSetForSale,
+  onToolDeleted,
 }) => {
   const [allTools, setAllTools] = useState<Tool[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [queueError, setQueueError] = useState<string | null>(null);
+  const [queueNotice, setQueueNotice] = useState<string | null>(null);
   const [updatingToolId, setUpdatingToolId] = useState<string | null>(null);
+  /** Listing awaiting the second click on the trash icon. */
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingToolId, setDeletingToolId] = useState<string | null>(null);
+
   // Shared allow-list helper (see lib/admin.ts): the queue must accept exactly
   // the accounts the header uses to reveal the "Admin Queue" button.
   const isAdmin = isAdminUser(user);
+
+  // Escape closes the queue and the directory behind it stops scrolling.
+  useModalDismiss(isOpen, onClose);
 
   useEffect(() => {
     if (!isOpen || !isAdmin) return;
@@ -45,6 +59,8 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
     const fetchTools = async () => {
       setIsLoading(true);
       setQueueError(null);
+      setQueueNotice(null);
+      setConfirmDeleteId(null);
 
       if (!isSupabaseConfigured || !supabase) {
         // Offline/demo mode: mirror the submissions queued in this browser.
@@ -75,9 +91,77 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
     };
   }, [isAdmin, isOpen]);
 
+  /**
+   * Applies a moderation result to the visible queue. Shared by the API path
+   * and the direct-write fallback so both behave identically.
+   */
+  const applyLocalChanges = (toolId: string, changes: Partial<Tool>): Tool | undefined => {
+    const target = allTools.find((tool) => tool.id === toolId);
+    setAllTools((current) =>
+      current.map((tool) => (tool.id === toolId ? { ...tool, ...changes } : tool)),
+    );
+    return target;
+  };
+
+  const notifySubmitter = (tool: Tool | undefined) => {
+    const submitterEmail = tool?.seller_contact?.trim();
+    if (!tool || !submitterEmail) return;
+    void fetch("/api/send-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "APP_APPROVED",
+        toolName: tool.name,
+        submitterEmail,
+        toolSlug: getToolSlug(tool),
+      }),
+    }).catch((notificationError) => {
+      console.error("Approval notification failed:", notificationError);
+    });
+  };
+
+  /** Access token for /api/admin-tools (null without a Supabase session). */
+  const getAccessToken = async (): Promise<string | null> => {
+    if (!isSupabaseConfigured || !supabase) return null;
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  };
+
+  /**
+   * Last-resort direct write with the anon key. PostgREST reports a write that
+   * Row Level Security filtered out as "0 rows matched" *without* an error, so
+   * the echoed rows - not the absence of `error` - decide success. That silent
+   * no-op is exactly what made the queue look broken.
+   */
+  const runDirectUpdate = async (
+    toolId: string,
+    changes: Record<string, unknown>,
+  ): Promise<Tool | undefined> => {
+    if (!supabase) return undefined;
+    const { data: updatedRows, error } = await supabase
+      .from("tools")
+      .update(changes as never)
+      .eq("id", toolId)
+      .select("id");
+
+    if (error) {
+      setQueueError(error.message);
+      return undefined;
+    }
+    if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
+      setQueueError(
+        "Supabase matched 0 rows, so nothing changed (a Row Level Security policy blocked the write). Deploy /api/admin-tools with SUPABASE_SERVICE_ROLE_KEY to moderate without RLS policies.",
+      );
+      return undefined;
+    }
+    return applyLocalChanges(toolId, changes as Partial<Tool>);
+  };
+
   const updateQueueTool = async (toolId: string, action: "approve" | "reject") => {
     setUpdatingToolId(toolId);
     setQueueError(null);
+    setQueueNotice(null);
+    setConfirmDeleteId(null);
 
     // `tools.status` only accepts pending | approved | rejected
     // (see lib/supabase/database.ts). Writing any other value - "active", for
@@ -87,45 +171,131 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
       ? { is_approved: true, status: "approved" as const }
       : { is_approved: false, status: "rejected" as const };
 
+    const finish = (notice: string) => {
+      setQueueNotice(notice);
+      setUpdatingToolId(null);
+    };
+
     if (!isSupabaseConfigured || !supabase) {
+      // Offline/demo mode: the queue only exists in this browser.
       const queued = readJsonArray<Tool>(STORAGE_KEYS.tools).map((tool) =>
         tool.id === toolId ? { ...tool, ...changes } : tool,
       );
       writeJsonArray(STORAGE_KEYS.tools, queued);
       setAllTools(queued);
-      setUpdatingToolId(null);
+      finish(`Saved in this browser: listing marked as ${changes.status}.`);
       return;
     }
 
-    const { error } = await supabase
+    // Preferred path: the service-role API, which also works when RLS hides the
+    // row from the anon key.
+    const token = await getAccessToken();
+    if (token) {
+      const result = await callAdminToolAction(action, toolId, token);
+      if (result.ok) {
+        const target = applyLocalChanges(toolId, changes);
+        if (action === "approve") notifySubmitter(target);
+        finish(`Listing ${action === "approve" ? "approved" : "rejected"} in Supabase.`);
+        return;
+      }
+      if (!isAdminApiUnavailable(result)) {
+        setQueueError(result.error ?? "The listing could not be updated.");
+        setUpdatingToolId(null);
+        return;
+      }
+      console.warn(
+        "Admin API unavailable - falling back to a direct Supabase write.",
+        result.error,
+      );
+    }
+
+    const target = await runDirectUpdate(toolId, changes);
+    if (target) {
+      if (action === "approve") notifySubmitter(target);
+      finish(`Listing ${action === "approve" ? "approved" : "rejected"}.`);
+      return;
+    }
+    if (!token) {
+      setQueueError(
+        "Sign in again as an administrator to moderate listings (the admin API needs a verified session).",
+      );
+    }
+    setUpdatingToolId(null);
+  };
+
+  const finishDelete = () => {
+    setDeletingToolId(null);
+    setConfirmDeleteId(null);
+  };
+
+  const removeLocally = (toolId: string, notice: string) => {
+    setAllTools((current) => current.filter((tool) => tool.id !== toolId));
+    onToolDeleted?.(toolId);
+    setQueueNotice(notice);
+  };
+
+  /**
+   * Permanently deletes a listing. Always prefers /api/admin-tools: the anon key
+   * cannot delete rows that Row Level Security protects, and a double-click
+   * confirm means a mis-click can never destroy a submission.
+   */
+  const handleDeleteTool = async (tool: Tool) => {
+    setDeletingToolId(tool.id);
+    setQueueError(null);
+    setQueueNotice(null);
+
+    if (!isSupabaseConfigured || !supabase) {
+      // Offline/demo mode: drop the record from this browser's queue.
+      const queued = readJsonArray<Tool>(STORAGE_KEYS.tools).filter(
+        (item) => item.id !== tool.id,
+      );
+      writeJsonArray(STORAGE_KEYS.tools, queued);
+      setAllTools(queued);
+      onToolDeleted?.(tool.id);
+      setQueueNotice(`Removed "${tool.name}" from this browser's queue.`);
+      finishDelete();
+      return;
+    }
+
+    const token = await getAccessToken();
+    if (token) {
+      const result = await callAdminToolAction("delete", tool.id, token);
+      if (result.ok) {
+        removeLocally(tool.id, `Deleted "${tool.name}" from Supabase.`);
+        finishDelete();
+        return;
+      }
+      if (!isAdminApiUnavailable(result)) {
+        setQueueError(result.error ?? `"${tool.name}" could not be deleted.`);
+        finishDelete();
+        return;
+      }
+      console.warn(
+        "Admin API unavailable - falling back to a direct Supabase delete.",
+        result.error,
+      );
+    }
+
+    // Fallback: only succeeds when RLS grants DELETE to the anon key. A blocked
+    // delete is reported instead of pretending the row is gone.
+    const { data: deletedRows, error } = await supabase
       .from("tools")
-      .update(changes as never)
-      .eq("id", toolId);
+      .delete()
+      .eq("id", tool.id)
+      .select("id");
 
     if (error) {
       setQueueError(error.message);
+    } else if (!Array.isArray(deletedRows) || deletedRows.length === 0) {
+      setQueueError(
+        token
+          ? "Supabase deleted 0 rows, so the listing is still there. Check SUPABASE_SERVICE_ROLE_KEY on /api/admin-tools."
+          : "Sign in again as an administrator: deleting listings needs a verified admin session.",
+      );
     } else {
-      const approvedTool = allTools.find((tool) => tool.id === toolId);
-      setAllTools((current) => current.map((tool) =>
-        tool.id === toolId ? { ...tool, ...changes } : tool,
-      ));
-      const submitterEmail = approvedTool?.seller_contact?.trim();
-      if (action === "approve" && approvedTool && submitterEmail) {
-        void fetch("/api/send-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "APP_APPROVED",
-            toolName: approvedTool.name,
-            submitterEmail,
-            toolSlug: getToolSlug(approvedTool),
-          }),
-        }).catch((notificationError) => {
-          console.error("Approval notification failed:", notificationError);
-        });
-      }
+      removeLocally(tool.id, `Deleted "${tool.name}" from Supabase.`);
     }
-    setUpdatingToolId(null);
+    finishDelete();
   };
 
   const handleSetFeature = (tool: Tool) => {
@@ -151,13 +321,23 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
 
   if (!isAdmin) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-denied-title"
+      >
         <div className="relative w-full max-w-md rounded-2xl border border-zinc-800 bg-[#0c0d14] p-6 text-zinc-100 shadow-2xl">
-          <button onClick={onClose} className="absolute right-5 top-5 p-1 text-zinc-400 hover:text-white" aria-label="Close">
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-5 top-5 p-1 text-zinc-400 hover:text-white"
+            aria-label="Close"
+          >
             <X className="h-5 w-5" />
           </button>
           <ShieldCheck className="h-8 w-8 text-red-400" />
-          <h2 className="mt-3 text-lg font-bold text-white">Admin access required</h2>
+          <h2 id="admin-denied-title" className="mt-3 text-lg font-bold text-white">Admin access required</h2>
           <p className="mt-1 text-sm text-zinc-400">This moderation queue is restricted to authorized administrators.</p>
         </div>
       </div>
@@ -165,11 +345,18 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="admin-queue-title"
+    >
       <div className="relative w-full max-w-3xl bg-[#0c0d14] border border-zinc-800 rounded-2xl shadow-2xl p-6 sm:p-7 text-zinc-100 my-8">
         {/* Close Button */}
         <button
+          type="button"
           onClick={onClose}
+          aria-label="Close"
           className="absolute top-5 right-5 text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition"
         >
           <X className="w-5 h-5" />
@@ -181,7 +368,7 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+            <h2 id="admin-queue-title" className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
               Supabase Review Queue & Mod Panel
             </h2>
             <p className="text-xs text-zinc-400 mt-0.5">
@@ -209,6 +396,12 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
           {queueError && (
             <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
               {queueError}
+            </div>
+          )}
+
+          {queueNotice && (
+            <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200">
+              {queueNotice}
             </div>
           )}
 
@@ -262,8 +455,9 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                     </a>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
                     <button
+                      type="button"
                       onClick={() => void updateQueueTool(tool.id, "approve")}
                       disabled={updatingToolId === tool.id}
                       className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition"
@@ -274,6 +468,7 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => handleSetFeature(tool)}
                       className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition"
                       title={tool.is_featured ? "Remove featured status" : "Promote to Featured"}
@@ -283,6 +478,7 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => handleSetForSale(tool)}
                       className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 transition"
                       title="Toggle acquisition listing"
@@ -291,13 +487,49 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => void updateQueueTool(tool.id, "reject")}
-                      disabled={updatingToolId === tool.id}
-                      className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition"
-                      title="Reject this submission"
+                      disabled={updatingToolId === tool.id || deletingToolId === tool.id}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 transition disabled:opacity-60"
+                      title="Reject this submission (keeps the row, marks it rejected)"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span>Reject</span>
                     </button>
+
+                    {confirmDeleteId === tool.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteTool(tool)}
+                          disabled={deletingToolId === tool.id}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-white bg-red-600 hover:bg-red-500 border border-red-500 transition disabled:opacity-60"
+                          title="Delete this row from Supabase permanently"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>
+                            {deletingToolId === tool.id ? "Deleting..." : "Confirm delete"}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="px-2 py-1.5 rounded-lg text-[11px] font-semibold text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-700 transition"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(tool.id)}
+                        disabled={deletingToolId === tool.id}
+                        className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition disabled:opacity-60"
+                        title="Delete this listing from Supabase"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

@@ -17,50 +17,97 @@ import {
 import { PricingType, SubmissionFormState, Tool } from "../types/directory";
 import { CATEGORIES } from "../data/mockTools";
 import { createToolId } from "../lib/submissions";
+import {
+  isPaddleCheckoutAbandoned,
+  isPaddleCheckoutCompleted,
+} from "../lib/paddleCheckout";
 import { getToolSlug } from "../lib/toolSlug";
+import { useModalDismiss } from "../lib/useModalDismiss";
 
 interface SubmitModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmitTool: (newTool: Tool, isPaddleCheckout: boolean) => void;
+  /**
+   * Persists a submission. `isPaddleCheckout` is true only after Paddle has
+   * confirmed the payment, and tells App to report failures instead of falling
+   * back to a browser-only save (the customer has already paid).
+   */
+  onSubmitTool: (newTool: Tool, isPaddleCheckout?: boolean) => Promise<void>;
 }
+
+/**
+ * Blank form state, shared by the initial `useState` and the reset that follows
+ * a successful submission, so the two can never drift apart.
+ */
+const EMPTY_SUBMISSION: SubmissionFormState = {
+  name: "",
+  tagline: "",
+  description: "",
+  website_url: "",
+  category: "Developer Tools",
+  pricing_type: "Freemium",
+  tier: "free",
+  customer_email: "",
+  is_for_sale: false,
+  asking_price: "",
+  monthly_revenue: "",
+  monthly_profit: "",
+  seller_contact: "",
+  tech_stack: "Next.js, Supabase, Tailwind CSS",
+};
 
 export const SubmitModal: React.FC<SubmitModalProps> = ({
   isOpen,
   onClose,
   onSubmitTool,
 }) => {
-  const [formData, setFormData] = useState<SubmissionFormState>({
-    name: "",
-    tagline: "",
-    description: "",
-    website_url: "",
-    category: "Developer Tools",
-    pricing_type: "Freemium",
-    tier: "free",
-    customer_email: "",
-    is_for_sale: false,
-    asking_price: "",
-    monthly_revenue: "",
-    monthly_profit: "",
-    seller_contact: "",
-    tech_stack: "Next.js, Supabase, Tailwind CSS",
-  });
+  const [formData, setFormData] = useState<SubmissionFormState>(EMPTY_SUBMISSION);
 
   const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
   const [showCheckoutSuccess, setShowCheckoutSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  // (`step`, the wizard progress indicator, is derived from the form further down.)
   const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [autoFillMessage, setAutoFillMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
   const [paymentUnavailable, setPaymentUnavailable] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  /** Set when Paddle took the payment but the row could not be persisted. */
+  const [paidSaveError, setPaidSaveError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+
+  /**
+   * The paid listing waiting for Paddle's confirmation. Nothing is written to
+   * the database while this is only a ref: the insert happens in
+   * `finalizePaidSubmission`, triggered by `checkout.completed`.
+   */
+  const pendingCheckoutToolRef = useRef<Tool | null>(null);
+  /** Paddle can deliver `checkout.completed` more than once - insert only once. */
+  const paidSubmissionHandledRef = useRef(false);
+  /** Latest finalize implementation, so Paddle's callback never sees a stale closure. */
+  const finalizePaidSubmissionRef = useRef<() => void>(() => {});
+  /** Pending auto-close timer scheduled by `resetSubmitModal`. */
+  const resetTimerRef = useRef<number | null>(null);
+
+  // Escape closes the modal and the grid behind it stops scrolling.
+  useModalDismiss(isOpen, onClose);
 
   const priceId = import.meta.env.VITE_PADDLE_PRICE_ID;
   const clientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
+
+  /**
+   * Wizard progress, derived from the form instead of tracked in state. The old
+   * `step` state was only ever set back to 1 when a submission succeeded, so a
+   * visitor who reopened the modal could see "3. Checkout / Submit" highlighted
+   * above an empty form.
+   */
+  const step: 1 | 2 | 3 =
+    isSubmitting || showCheckoutSuccess || submissionSuccess
+      ? 3
+      : formData.name?.trim() && formData.website_url?.trim()
+        ? 2
+        : 1;
 
   const getUrlDetails = (value: string) => {
     try {
@@ -105,6 +152,14 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     if (!isOpen) {
       setIsSubmitting(false);
       setIsProcessingCheckout(false);
+      // Drop a pending "close after success" timer so it can never fire on a
+      // modal the user has reopened in the meantime.
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = null;
+      }
+      // A pending paid listing deliberately survives the close: Paddle may still
+      // deliver checkout.completed, and that payment must not be lost.
       return;
     }
     if (window.Paddle && clientToken) {
@@ -112,7 +167,17 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         window.Paddle.Initialize({
           token: clientToken,
           eventCallback: (event) => {
-            if (event.event_type === "checkout.closed" || event.event_type === "checkout.error") {
+            // Paddle Billing reports `checkout.completed` here (see
+            // lib/paddleCheckout.ts) — this is the only signal that may create
+            // the paid listing.
+            if (isPaddleCheckoutCompleted(event)) {
+              finalizePaidSubmissionRef.current();
+              return;
+            }
+            if (isPaddleCheckoutAbandoned(event)) {
+              if (paidSubmissionHandledRef.current) return;
+              // Nothing was paid for, so drop the held listing.
+              pendingCheckoutToolRef.current = null;
               setIsProcessingCheckout(false);
               setIsSubmitting(false);
               setShowCheckoutSuccess(false);
@@ -122,9 +187,74 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       } catch (error) {
         console.error("Paddle initialization failed:", error);
         setPaymentError(error instanceof Error ? error.message : String(error));
+        // The overlay can never open in this state, so offer the free fallback.
+        setPaymentUnavailable(true);
       }
     }
+
+    // Unmount safety net: no timer may outlive the component that owns it.
+    return () => {
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = null;
+      }
+    };
   }, [isOpen, clientToken]);
+
+  /** Clears the form and closes the modal a moment after a successful submit. */
+  const resetSubmitModal = (delayMs = 1500) => {
+    // A second success must not stack a second timer behind the first one.
+    if (resetTimerRef.current !== null) window.clearTimeout(resetTimerRef.current);
+    resetTimerRef.current = window.setTimeout(() => {
+      resetTimerRef.current = null;
+      setSubmissionSuccess(false);
+      setShowCheckoutSuccess(false);
+      setPaymentUnavailable(false);
+      setPaymentError(null);
+      setPaidSaveError(null);
+      setFormData(EMPTY_SUBMISSION);
+      pendingCheckoutToolRef.current = null;
+      paidSubmissionHandledRef.current = false;
+      onClose();
+    }, delayMs);
+  };
+
+  /**
+   * Persists the paid Featured listing. This is the ONLY database write on the
+   * paid path, and it runs exclusively because Paddle reported
+   * `checkout.completed`: an abandoned or still-open overlay must never leave a
+   * row behind. api/paddle-webhook.ts mirrors this by inserting the same
+   * `custom_data.tool_id` if the buyer never returns to the tab, so the two
+   * paths converge on one row instead of duplicating it.
+   */
+  const finalizePaidSubmission = async () => {
+    const pendingTool = pendingCheckoutToolRef.current;
+    if (!pendingTool || paidSubmissionHandledRef.current) return;
+    paidSubmissionHandledRef.current = true;
+
+    setPaymentError(null);
+    setPaidSaveError(null);
+    setIsProcessingCheckout(false);
+    setShowCheckoutSuccess(true);
+    setIsSubmitting(true);
+
+    try {
+      await onSubmitTool(pendingTool, true);
+      setSubmissionSuccess(true);
+      resetSubmitModal();
+    } catch (error) {
+      console.error("Paid Featured submission could not be saved:", error);
+      // The payment succeeded, so this must not be downgraded to a local-only
+      // save. Allow a retry that saves the same listing without paying again.
+      paidSubmissionHandledRef.current = false;
+      setPaidSaveError(
+        "Paddle confirmed your payment, but we could not save the listing automatically. Your payment is safe — retry saving below and you will not be charged again.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  finalizePaidSubmissionRef.current = () => void finalizePaidSubmission();
 
   const handleAutoFill = async () => {
     const details = getUrlDetails(formData.website_url);
@@ -268,18 +398,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         setIsSubmitting(false);
       }
       if (!submitted) return;
-      window.setTimeout(() => {
-        setSubmissionSuccess(false);
-        setFormData({
-          name: "", tagline: "", description: "", website_url: "",
-          category: "Developer Tools", pricing_type: "Freemium", tier: "free",
-          customer_email: "", is_for_sale: false, asking_price: "",
-          monthly_revenue: "", monthly_profit: "", seller_contact: "",
-          tech_stack: "Next.js, Supabase, Tailwind CSS",
-        });
-        setStep(1);
-        onClose();
-      }, 1500);
+      resetSubmitModal();
     };
 
     if (formData.tier === "paddle_featured") {
@@ -291,12 +410,24 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
             ? "Error: VITE_PADDLE_CLIENT_TOKEN is missing"
             : "Error: VITE_PADDLE_PRICE_ID is missing";
         setPaymentError(diagnostic);
+        // Checkout cannot even start, so surface the banner that lets the user
+        // submit the very same listing for free instead.
+        setPaymentUnavailable(true);
         return;
       }
 
+      // The listing is held in memory only. The database insert happens in
+      // finalizePaidSubmission, which runs when Paddle reports
+      // `checkout.completed` - or in api/paddle-webhook.ts when this tab never
+      // comes back - so an abandoned checkout never creates a listing.
+      pendingCheckoutToolRef.current = baseTool;
+      paidSubmissionHandledRef.current = false;
+      setPaymentError(null);
+      setPaidSaveError(null);
+      setShowCheckoutSuccess(false);
       setIsSubmitting(true);
       setIsProcessingCheckout(true);
-      let checkoutOpened = false;
+
       try {
         paddle.Checkout.open({
           items: [{ priceId, quantity: 1 }],
@@ -304,7 +435,8 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
           // Every value is a string - Paddle rejects nested or non-string
           // custom_data. tool_name / tool_slug / website_url / customer_email
           // are the fallbacks api/paddle-webhook.ts uses when it cannot read the
-          // row by id.
+          // row by id; category / pricing_type / tagline / description let that
+          // webhook build the complete row when it has to insert one.
           customData: {
             tool_id: baseTool.id,
             plan_type: "featured_listing",
@@ -312,23 +444,22 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
             tool_slug: getToolSlug(baseTool),
             website_url: baseTool.website_url,
             customer_email: formData.customer_email?.trim() || "",
+            category: baseTool.category,
+            pricing_type: baseTool.pricing_type,
+            tagline: baseTool.tagline,
+            description: baseTool.description,
           },
           settings: { displayMode: "overlay" },
         });
-        checkoutOpened = true;
-        setIsProcessingCheckout(false);
-        setShowCheckoutSuccess(true);
-        await onSubmitTool(baseTool, true);
-        setIsSubmitting(false);
       } catch (error) {
         console.error("Paddle checkout failed:", error);
-        setPaymentError(error instanceof Error ? error.message : String(error));
+        // The overlay never opened, so nothing can be paid for: release the
+        // held listing.
+        pendingCheckoutToolRef.current = null;
         setIsProcessingCheckout(false);
         setIsSubmitting(false);
+        setPaymentError(error instanceof Error ? error.message : String(error));
         setErrorMsg("Payment could not be opened. Please check your Paddle configuration and try again.");
-      } finally {
-        setIsProcessingCheckout(false);
-        if (!checkoutOpened) setIsSubmitting(false);
       }
     } else {
       // Free Submission -> Queue for review
@@ -338,11 +469,18 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="submit-modal-title"
+    >
       <div className="relative w-full max-w-2xl bg-[#0e0f17] border border-zinc-800 rounded-2xl shadow-2xl p-6 sm:p-8 text-zinc-100 my-8">
         {/* Close Button */}
         <button
+          type="button"
           onClick={onClose}
+          aria-label="Close"
           className="absolute top-5 right-5 text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition"
         >
           <X className="w-5 h-5" />
@@ -354,7 +492,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
             <Sparkles className="w-3.5 h-3.5" />
             <span>List Startup, Micro-SaaS & Developer Tools</span>
           </div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">
+          <h2 id="submit-modal-title" className="text-2xl font-bold text-white tracking-tight">
             Submit to StackDirectory
           </h2>
           <p className="text-xs sm:text-sm text-zinc-400 mt-1">
@@ -799,20 +937,38 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                     {paymentError}
                   </div>
                 )}
+                {paidSaveError && (
+                  <div className="w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800" role="alert">
+                    <p>{paidSaveError}</p>
+                    <button
+                      type="button"
+                      onClick={() => finalizePaidSubmissionRef.current()}
+                      disabled={isSubmitting}
+                      className="mt-2 rounded-md bg-amber-500 px-3 py-1.5 text-[11px] font-bold text-zinc-950 hover:bg-amber-400 disabled:opacity-60"
+                    >
+                      Retry saving my listing (no extra charge)
+                    </button>
+                  </div>
+                )}
                 <button
                   type="submit"
                   disabled={isSubmitting || isProcessingCheckout || showCheckoutSuccess}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold text-zinc-950 bg-linear-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-lg shadow-amber-500/20 active:scale-95 transition disabled:opacity-50"
                 >
-                  {isSubmitting || isProcessingCheckout ? (
+                  {isSubmitting ? (
                     <>
                       <span className="h-3.5 w-3.5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
-                      <span>Opening Payment...</span>
+                      <span>Saving your Featured listing...</span>
+                    </>
+                  ) : isProcessingCheckout ? (
+                    <>
+                      <span className="h-3.5 w-3.5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
+                      <span>Waiting for Payment...</span>
                     </>
                   ) : showCheckoutSuccess ? (
                     <>
                       <CheckCircle2 className="w-4 h-4 text-zinc-950" />
-                      <span>Payment Verified! Launching...</span>
+                      <span>Payment Verified!</span>
                     </>
                   ) : (
                     <>

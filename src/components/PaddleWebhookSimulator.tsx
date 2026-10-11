@@ -16,6 +16,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { Tool, PaddleWebhookPayload } from "../types/directory";
+import { useModalDismiss } from "../lib/useModalDismiss";
 
 interface PaddleWebhookSimulatorProps {
   isOpen: boolean;
@@ -45,6 +46,9 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
   const [isSimulating, setIsSimulating] = useState(false);
   const [webhookResponse, setWebhookResponse] = useState<any | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Escape closes the simulator and the page behind it stops scrolling.
+  useModalDismiss(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -118,11 +122,18 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="paddle-simulator-modal-title"
+    >
       <div className="relative w-full max-w-2xl bg-[#0c0d14] border border-zinc-800 rounded-2xl shadow-2xl p-6 sm:p-7 text-zinc-100 my-8">
         {/* Close Button */}
         <button
+          type="button"
           onClick={onClose}
+          aria-label="Close Paddle webhook simulator"
           className="absolute top-5 right-5 text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition"
         >
           <X className="w-5 h-5" />
@@ -134,7 +145,10 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
             <Webhook className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+            <h2
+              id="paddle-simulator-modal-title"
+              className="text-xl font-bold text-white tracking-tight flex items-center gap-2"
+            >
               Paddle Webhook Simulator
               <span className="text-[11px] font-mono font-normal px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
                 POST /api/webhooks/paddle
@@ -198,6 +212,7 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
               Webhook Payload (JSON)
             </span>
             <button
+              type="button"
               onClick={handleCopyPayload}
               className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 px-2 py-1 rounded border border-zinc-800 transition"
             >
@@ -226,6 +241,7 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
           </div>
 
           <button
+            type="button"
             onClick={handleSimulateWebhook}
             disabled={isSimulating}
             className="inline-flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-bold text-zinc-950 bg-gradient-to-r from-amber-400 to-orange-400 hover:brightness-110 shadow-md shadow-amber-500/20 active:scale-95 transition disabled:opacity-50"

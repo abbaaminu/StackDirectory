@@ -5,6 +5,7 @@ import supabase, { isSupabaseConfigured } from "../lib/supabase";
 import { sanitizeDealMessage } from "../lib/redact";
 import { getToolSlug } from "../lib/toolSlug";
 import { readJsonArray, STORAGE_KEYS } from "../lib/localStore";
+import { useModalDismiss } from "../lib/useModalDismiss";
 
 interface DealConversation {
   id: string;
@@ -60,6 +61,20 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
   const [offerAmount, setOfferAmount] = useState("");
   const [offerMessage, setOfferMessage] = useState("");
   const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
+
+  /**
+   * Escape closes the innermost layer first: the offer form while it is open,
+   * otherwise the deal room itself. `useModalDismiss` reads the callback through
+   * a ref, so building a fresh closure on every render does not re-register the
+   * keydown listener.
+   */
+  useModalDismiss(isOpen, () => {
+    if (isOfferModalOpen) {
+      setIsOfferModalOpen(false);
+      return;
+    }
+    onClose();
+  });
 
   useEffect(() => {
     if (!isOpen || !tool) return;
@@ -313,9 +328,9 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
         )}
         {conversation?.nda_signed && <div className="flex items-center gap-2 border-t border-slate-100 px-5 py-2 text-[11px] text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> NDA verified for this conversation</div>}
       </section>
-      {isOfferModalOpen && <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true">
+      {isOfferModalOpen && <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="deal-room-offer-title">
         <form onSubmit={submitOffer} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-          <div className="flex items-center justify-between"><h3 className="text-lg font-bold text-slate-950">Submit Formal Offer</h3><button type="button" onClick={() => setIsOfferModalOpen(false)} aria-label="Close offer form" className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
+          <div className="flex items-center justify-between"><h3 id="deal-room-offer-title" className="text-lg font-bold text-slate-950">Submit Formal Offer</h3><button type="button" onClick={() => setIsOfferModalOpen(false)} aria-label="Close offer form" className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
           <label className="mt-5 block text-sm font-semibold text-slate-700">Offer Amount ($ USD)<input type="number" min="1" step="0.01" required value={offerAmount} onChange={(event) => setOfferAmount(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-amber-400" /></label>
           <label className="mt-4 block text-sm font-semibold text-slate-700">Introductory Note / Terms<textarea rows={4} value={offerMessage} onChange={(event) => setOfferMessage(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-amber-400" /></label>
           <button type="submit" disabled={isSubmittingOffer} className="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-60">{isSubmittingOffer ? "Submitting offer..." : "Submit Offer"}</button>

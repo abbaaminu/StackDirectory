@@ -14,6 +14,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { CODE_FILES } from "../data/nextjsCodebase";
+import { useModalDismiss } from "../lib/useModalDismiss";
 
 interface CodeViewerModalProps {
   isOpen: boolean;
@@ -27,6 +28,9 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
   const [activeFileIndex, setActiveFileIndex] = useState(0);
   const [copiedFileIndex, setCopiedFileIndex] = useState<number | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
+
+  // Escape closes the viewer and the scroll lock matches the other overlays.
+  useModalDismiss(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -64,7 +68,12 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="code-viewer-modal-title"
+    >
       <div className="relative w-full max-w-5xl h-[88vh] bg-[#0a0b10] border border-zinc-800 rounded-2xl shadow-2xl flex flex-col text-zinc-100 overflow-hidden">
         {/* Top Header */}
         <div className="px-6 py-4 border-b border-zinc-800/80 bg-[#0e0f17] flex items-center justify-between gap-4 shrink-0">
@@ -73,7 +82,10 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
               <Layers className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+              <h2
+                id="code-viewer-modal-title"
+                className="text-lg font-bold text-white tracking-tight flex items-center gap-2"
+              >
                 Production Codebase & Architecture
                 <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
                   Ready for VS Code
@@ -88,6 +100,7 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handleCopyAll}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-950 bg-amber-400 hover:bg-amber-300 transition active:scale-95 shadow-sm"
             >
@@ -100,7 +113,9 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={onClose}
+              aria-label="Close production codebase viewer"
               className="text-zinc-400 hover:text-white p-1.5 rounded-lg hover:bg-zinc-800 transition"
             >
               <X className="w-5 h-5" />
@@ -119,6 +134,7 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
               const isActive = activeFileIndex === idx;
               return (
                 <button
+                  type="button"
                   key={file.filepath}
                   onClick={() => setActiveFileIndex(idx)}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-mono text-left transition ${
@@ -174,6 +190,7 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
               </div>
 
               <button
+                type="button"
                 onClick={() =>
                   handleCopySingle(currentFile.code, activeFileIndex)
                 }

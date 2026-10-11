@@ -81,6 +81,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
 
       {/* Left Upvote Button (Product Hunt format) */}
       <button
+        type="button"
         id={`btn-upvote-${tool.id}`}
         onClick={handleUpvote}
         className={`flex flex-col items-center justify-center w-12 h-14 rounded-xl border border-slate-200 bg-slate-50 hover:bg-amber-50 hover:border-amber-300 text-slate-700 hover:text-amber-600 transition-all shrink-0 cursor-pointer ${

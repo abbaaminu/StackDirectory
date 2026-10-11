@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Check, Clipboard, LoaderCircle, Mail, X } from "lucide-react";
+import { useModalDismiss } from "../lib/useModalDismiss";
 
 const SUPPORT_EMAIL = "support@stackbuildco.com";
 
@@ -16,21 +17,8 @@ export const SupportModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
   const [isSent, setIsSent] = useState(false);
   const [formError, setFormError] = useState("");
 
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen, onClose]);
+  // Escape and the scroll lock are shared with the other overlay modals.
+  useModalDismiss(isOpen, onClose);
 
   if (!isOpen) return null;
 

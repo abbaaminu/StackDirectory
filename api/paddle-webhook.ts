@@ -18,7 +18,10 @@ type WebhookRequest = IncomingMessage & {
  *
  * On a `transaction.completed` event, reads `custom_data.tool_id` (or the
  * top-level `tool_id`) passed at checkout time and upgrades that tool in
- * Supabase to `is_approved = true` and `is_featured = true`.
+ * Supabase to `is_approved = true` and `is_featured = true`. When no row matches
+ * (the buyer never returned to the tab that would have inserted the pending
+ * row), the listing is created from the same signed `custom_data` instead, so a
+ * paying customer is never left without the Featured slot they bought.
  *
  * Once the listing is live it also triggers an instant Resend confirmation
  * receipt (POST /api/send-email with `type: "PAYMENT_RECEIPT"`) containing the
@@ -117,6 +120,84 @@ function slugify(value: string): string {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+/** Reads a trimmed string out of Paddle's `custom_data` (numbers included). */
+function text(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+}
+
+/**
+ * PostgREST reports a unique-violation insert as `23505`. The code is checked
+ * first because the human-readable message varies by Postgres version.
+ */
+function isDuplicateKeyError(error: { message?: string; code?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === "23505" || /duplicate key/i.test(error.message ?? "");
+}
+
+/** `tools.pricing_type` is constrained to these four values in Supabase. */
+const PRICING_TYPES = ["Free", "Freemium", "Paid", "Open Source"] as const;
+
+/** Favicon URL, matching the one SubmitModal derives from the listing URL. */
+function faviconUrl(websiteUrl: string): string | null {
+  try {
+    const host = new URL(websiteUrl).hostname.replace(/^www\./i, "");
+    return host ? `https://www.google.com/s2/favicons?domain=${host}&sz=128` : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Complete `public.tools` row for a paid Featured listing that has no database
+ * record yet.
+ *
+ * The client (SubmitModal.tsx) inserts its pending row only after
+ * `checkout.completed` has fired, so a buyer who closes the tab while the
+ * payment is settling would otherwise pay for a listing that never appears.
+ * Everything here comes from the HMAC-verified webhook payload, and the row is
+ * created already approved + featured because the payment is what it bought.
+ *
+ * Returns `null` when the payload does not carry enough detail to build a
+ * listing (no name or no URL) - fabricating one would be worse than a log line.
+ */
+function buildPaidListingRow(
+  customData: Record<string, unknown>,
+  options: { id: string; customerId: string; websiteUrl: string },
+): Record<string, unknown> | null {
+  const name = text(customData.tool_name);
+  if (!name || !options.websiteUrl) return null;
+
+  const tagline = text(customData.tagline) || `${name} — featured listing on StackDirectory.`;
+  const requestedPricing = text(customData.pricing_type);
+  const submitterEmail = text(customData.customer_email);
+
+  return {
+    id: options.id,
+    name,
+    tagline,
+    description: text(customData.description) || tagline,
+    website_url: options.websiteUrl,
+    icon_url: faviconUrl(options.websiteUrl),
+    pricing_type: (PRICING_TYPES as readonly string[]).includes(requestedPricing)
+      ? requestedPricing
+      : "Freemium",
+    category: text(customData.category) || "Developer Tools",
+    upvotes: 0,
+    is_approved: true,
+    is_featured: true,
+    status: "approved",
+    paddle_customer_id: options.customerId || null,
+    is_for_sale: false,
+    asking_price: null,
+    monthly_revenue: 0,
+    monthly_profit: 0,
+    seller_contact: submitterEmail || null,
+    tech_stack: [],
+  };
 }
 
 /** Absolute base URL of this deployment, used to call our own /api/send-email. */
@@ -334,20 +415,24 @@ export default async function handler(
       },
     });
 
-    // 5. Update the tool: approve + feature it (bypasses RLS via service role).
+    // 5. Upgrade the tool: approve + feature it (bypasses RLS via service role).
     //    `.select(...)` echoes the updated row so the receipt can quote the real
     //    submission details without a second query.
     //    `tools.status` is constrained to pending | approved | rejected (see
     //    src/lib/supabase/database.ts) - writing "active" fails the column
     //    constraint and would abort the whole upgrade.
-    const featuredUpgrade = {
+    const matchingValue = toolId.trim();
+    const customWebsiteUrl = text(customData.website_url);
+    const paddleCustomerId = text(data?.customer_id);
+
+    const featuredUpgrade: Record<string, unknown> = {
       is_approved: true,
       is_featured: true,
-      status: "approved" as const,
+      status: "approved",
     };
-    const matchingValue = toolId.trim();
-    const customWebsiteUrl =
-      typeof customData.website_url === "string" ? customData.website_url.trim() : "";
+    // Record which Paddle customer paid so the queue can reconcile a listing
+    // with its receipt.
+    if (paddleCustomerId) featuredUpgrade.paddle_customer_id = paddleCustomerId;
 
     let { data: updatedRows, error } = await supabaseAdmin
       .from("tools")
@@ -355,11 +440,10 @@ export default async function handler(
       .eq("id", matchingValue)
       .select("id, name, category, pricing_type, website_url");
 
-    const matchedRowCount = Array.isArray(updatedRows)
-      ? updatedRows.length
-      : updatedRows
-        ? 1
-        : 0;
+    const countRows = (rows: unknown): number =>
+      Array.isArray(rows) ? rows.length : rows ? 1 : 0;
+
+    let matchedRowCount = countRows(updatedRows);
 
     if (!error && matchedRowCount === 0 && customWebsiteUrl) {
       // Legacy or mismatched custom_data: retry against the listing URL so a
@@ -372,6 +456,8 @@ export default async function handler(
         .update(featuredUpgrade as never)
         .eq("website_url", customWebsiteUrl)
         .select("id, name, category, pricing_type, website_url"));
+
+      matchedRowCount = countRows(updatedRows);
     }
 
     if (error) {
@@ -387,22 +473,86 @@ export default async function handler(
       return;
     }
 
-    const updatedTool = (Array.isArray(updatedRows) ? updatedRows[0] : updatedRows) as
-      | PaddleToolRow
-      | null
-      | undefined;
+    const asToolRow = (rows: unknown): PaddleToolRow | null => {
+      const row = Array.isArray(rows) ? rows[0] : rows;
+      return (row as PaddleToolRow | null) ?? null;
+    };
+
+    let updatedTool = asToolRow(updatedRows);
+    let createdTool: PaddleToolRow | null = null;
 
     if (updatedTool) {
       console.log(
         `[Paddle Webhook] Successfully upgraded tool "${updatedTool.name ?? toolId}" to Featured & Approved.`,
       );
     } else {
-      console.warn(
-        `[Paddle Webhook] No tool row matched id "${toolId.trim()}" — nothing was upgraded.`,
-      );
+      // 6. Nothing matched. The buyer paid from a browser that never came back
+      //    to create its pending row (SubmitModal.tsx only inserts after
+      //    checkout.completed), so create the listing here instead of losing the
+      //    purchase. The row id is the same `custom_data.tool_id` the client
+      //    would have used, so the two paths can never produce two listings.
+      const insertRow = buildPaidListingRow(customData, {
+        id: matchingValue,
+        customerId: paddleCustomerId,
+        websiteUrl: customWebsiteUrl,
+      });
+
+      if (!insertRow) {
+        console.error(
+          `[Paddle Webhook] Paid transaction "${text(data?.id) || "unknown"}" references tool_id "${matchingValue}" but carries no tool_name/website_url, so no listing could be created. Manual follow-up required.`,
+        );
+      } else {
+        const { error: insertError } = await supabaseAdmin
+          .from("tools")
+          .insert(insertRow as never);
+
+        if (!insertError) {
+          createdTool = {
+            id: matchingValue,
+            name: String(insertRow.name ?? ""),
+            category: String(insertRow.category ?? ""),
+            pricing_type: String(insertRow.pricing_type ?? ""),
+            website_url: String(insertRow.website_url ?? ""),
+          };
+          console.log(
+            `[Paddle Webhook] Created and featured the paid listing "${createdTool.name}" (${matchingValue}).`,
+          );
+        } else if (isDuplicateKeyError(insertError)) {
+          // Unique violation: the browser inserted its own row between the two
+          // lookups. Upgrade that row instead of failing the webhook.
+          console.warn(
+            "[Paddle Webhook] The listing appeared during the insert - upgrading it instead.",
+          );
+          const { data: racedRows, error: raceError } = await supabaseAdmin
+            .from("tools")
+            .update(featuredUpgrade as never)
+            .eq("id", matchingValue)
+            .select("id, name, category, pricing_type, website_url");
+
+          if (raceError) {
+            console.error("[Paddle Webhook] Race recovery update failed:", raceError.message);
+          } else {
+            updatedTool = asToolRow(racedRows);
+          }
+        } else {
+          console.error("[Paddle Webhook] Failed to create the paid listing:", insertError.message);
+          res.statusCode = 500;
+          res.setHeader("Content-Type", "application/json");
+          res.end(
+            JSON.stringify({
+              success: false,
+              error: "Failed to create the paid Featured listing.",
+            }),
+          );
+          return;
+        }
+      }
     }
 
-    // 6. Trigger the instant Resend confirmation receipt for the buyer.
+    // The listing the receipt should describe, whichever path created it.
+    const effectiveTool = updatedTool ?? createdTool;
+
+    // 7. Trigger the instant Resend confirmation receipt for the buyer.
     //    Best-effort: the payment already succeeded and the listing is already
     //    live, so email problems must never fail the webhook response.
     const customerEmail =
@@ -426,7 +576,7 @@ export default async function handler(
       (itemMinorTotal > 0 ? itemMinorTotal : FALLBACK_FEATURED_PRICE_MINOR);
 
     const knownToolName =
-      updatedTool?.name?.trim() ||
+      effectiveTool?.name?.trim() ||
       (typeof customData.tool_name === "string" ? customData.tool_name.trim() : "");
 
     const receiptToolName = knownToolName || "Your StackDirectory listing";
@@ -434,7 +584,7 @@ export default async function handler(
     const slugSource =
       (typeof customData.tool_slug === "string" ? customData.tool_slug.trim() : "") ||
       knownToolName ||
-      updatedTool?.id ||
+      effectiveTool?.id ||
       toolId;
 
     const toolSlug = slugify(slugSource) || toolId.trim();
@@ -460,8 +610,8 @@ export default async function handler(
             orderNumber: typeof data?.invoice_number === "string" ? data.invoice_number : "",
             itemDescription: data?.items?.[0]?.price?.description ?? "",
             planLabel: RECEIPT_PLAN_LABEL,
-            category: updatedTool?.category ?? "",
-            pricingType: updatedTool?.pricing_type ?? "",
+            category: effectiveTool?.category ?? "",
+            pricingType: effectiveTool?.pricing_type ?? "",
             paidAt: data?.billed_at ?? data?.created_at ?? new Date().toISOString(),
           }),
         });
@@ -486,10 +636,11 @@ export default async function handler(
       }
     }
 
-    // 7. Return success JSON
+    // 8. Return success JSON. `created` reports whether this delivery had to
+    //    create the listing because no row existed yet.
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ success: true, emailSent }));
+    res.end(JSON.stringify({ success: true, emailSent, created: Boolean(createdTool) }));
   } catch (err) {
     console.error("[Paddle Webhook] Handler error:", err);
     res.statusCode = 500;

@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import supabase, { isSupabaseConfigured } from "../lib/supabase";
+import { useModalDismiss } from "../lib/useModalDismiss";
 
 export type AuthMode = "login" | "signup";
 
@@ -42,22 +43,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (isOpen) setMode(initialMode);
   }, [initialMode, isOpen]);
 
-  // Lock body scroll & close on Escape while the modal is open
-  useEffect(() => {
-    if (!isOpen) return;
-
-    document.body.style.overflow = "hidden";
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = "unset";
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen, onClose]);
+  // Lock body scroll & close on Escape while the modal is open. Shared with the
+  // other modals so the previous overflow value is always restored (a modal
+  // opened on top of another one must not unlock the page behind it).
+  useModalDismiss(isOpen, onClose);
 
   if (!isOpen) return null;
 

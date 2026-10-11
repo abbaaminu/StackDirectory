@@ -8,8 +8,8 @@
  * sync with `.env.example`.
  *
  * Server-only secrets (`SUPABASE_SERVICE_ROLE_KEY`, `PADDLE_API_KEY`,
- * `PADDLE_WEBHOOK_SECRET_KEY`, `RESEND_API_KEY`, `APP_URL`) are read with
- * `process.env` inside `api/` and must never be declared here.
+ * `PADDLE_WEBHOOK_SECRET_KEY`, `RESEND_API_KEY`, `APP_URL`, `ADMIN_EMAILS`) are
+ * read with `process.env` inside `api/` and must never be declared here.
  */
 interface ImportMetaEnv {
 	/** Supabase project URL (public). */
@@ -32,7 +32,16 @@ interface Window {
 	Paddle?: {
 		Initialize: (options: {
 			token: string;
-			eventCallback?: (event: { event_type?: string }) => void;
+			/**
+			 * Paddle Billing (v2) reports the event name on `name`
+			 * (`checkout.completed`, `checkout.closed`, …); `event_type` is the
+			 * classic field — see src/lib/paddleCheckout.ts.
+			 */
+			eventCallback?: (event: {
+				name?: string;
+				event_type?: string;
+				data?: Record<string, unknown>;
+			}) => void;
 		}) => void;
 		Checkout: {
 			open: (options: {
@@ -44,3 +53,4 @@ interface Window {
 		};
 	};
 }
+

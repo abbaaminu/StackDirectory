@@ -4,6 +4,7 @@ import type { Tool } from "../types/directory";
 import { handleVisitWebsite } from "../lib/trackToolClick";
 import { getHostname } from "../lib/toolDisplay";
 import { getToolSlug } from "../lib/toolSlug";
+import { useModalDismiss } from "../lib/useModalDismiss";
 
 interface ToolDetailModalProps {
   isOpen: boolean;
@@ -27,6 +28,9 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
   const [isCopied, setIsCopied] = useState(false);
   const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
   const [shareNotice, setShareNotice] = useState("");
+
+  // Escape closes the detail modal and freezes the grid scrolling behind it.
+  useModalDismiss(isOpen, onClose);
 
   useEffect(() => {
     if (tool) {

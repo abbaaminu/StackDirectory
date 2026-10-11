@@ -14,6 +14,7 @@ import {
 import { Tool } from "../types/directory";
 import supabase, { isSupabaseConfigured } from "../lib/supabase";
 import { readJsonArray, STORAGE_KEYS, writeJsonArray } from "../lib/localStore";
+import { useModalDismiss } from "../lib/useModalDismiss";
 
 interface AcquisitionModalProps {
   isOpen: boolean;
@@ -35,6 +36,9 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Escape and the scroll lock behave exactly like the other overlay modals.
+  useModalDismiss(isOpen, onClose);
 
   if (!isOpen || !tool) return null;
 
@@ -109,10 +113,16 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="acquisition-modal-title"
+    >
       <div className="relative w-full max-w-lg bg-slate-900/95 border border-amber-500/30 rounded-2xl shadow-2xl p-6 sm:p-7 text-zinc-100 my-8">
         {/* Close Button */}
         <button
+          type="button"
           onClick={handleClose}
           className="absolute top-5 right-5 text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition"
           aria-label="Close"
@@ -133,7 +143,7 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
 
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+            <h2 id="acquisition-modal-title" className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
               {tool.name}
             </h2>
             <p className="text-xs sm:text-sm text-zinc-300 mt-0.5 font-medium line-clamp-2">
@@ -172,6 +182,7 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
               </p>
             </div>
             <button
+              type="button"
               onClick={handleClose}
               className="mt-3 inline-flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-bold text-zinc-950 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-300 hover:brightness-110 shadow-lg shadow-amber-500/20 active:scale-95 transition"
             >

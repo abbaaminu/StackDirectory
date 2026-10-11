@@ -33,10 +33,16 @@ import { SupportModal } from "../src/components/SupportModal";
 import { TermsModal } from "../src/components/TermsModal";
 import { ToolCard, ToolCardSkeleton } from "../src/components/ToolCard";
 import { ToolDetailModal } from "../src/components/ToolDetailModal";
+import adminToolsHandler from "../api/admin-tools";
 import paddleWebhookHandler, { verifyPaddleSignature } from "../api/paddle-webhook";
 import sendEmailHandler from "../api/send-email";
 import { INITIAL_TOOLS } from "../src/data/mockTools";
 import { getAdminEmails, isAdminEmail, isAdminUser } from "../src/lib/admin";
+import {
+  ADMIN_TOOLS_ENDPOINT,
+  callAdminToolAction,
+  isAdminApiUnavailable,
+} from "../src/lib/adminTools";
 import {
   readJsonArray,
   readStringArray,
@@ -44,8 +50,14 @@ import {
   writeJsonArray,
   writeStringArray,
 } from "../src/lib/localStore";
+import {
+  isPaddleCheckoutAbandoned,
+  isPaddleCheckoutCompleted,
+  PADDLE_CHECKOUT_COMPLETED,
+  readPaddleEventName,
+} from "../src/lib/paddleCheckout";
 import { sanitizeDealMessage } from "../src/lib/redact";
-import { buildToolInsertRow, createToolId } from "../src/lib/submissions";
+import { buildToolInsertRow, createToolId, isDuplicateRowError } from "../src/lib/submissions";
 import { getHostname, getPricingBadgeColor } from "../src/lib/toolDisplay";
 import { buildCategoryOptions, matchesToolFilters, sortTools } from "../src/lib/toolFilters";
 import { getToolSlug } from "../src/lib/toolSlug";
@@ -85,6 +97,16 @@ Object.defineProperty(globalThis, "localStorage", {
 const resetStorage = (): void => memoryStorage.clear();
 
 const noop = (): void => {};
+
+/**
+ * SubmitModal hands every submission to App through this prop. Recording the
+ * calls lets the suite assert that a plain render (or a re-render) never writes
+ * anything on its own.
+ */
+const submitCalls: Array<{ tool: Tool; isPaddleCheckout: boolean }> = [];
+const submitSpy = async (tool: Tool, isPaddleCheckout?: boolean): Promise<void> => {
+  submitCalls.push({ tool, isPaddleCheckout: Boolean(isPaddleCheckout) });
+};
 
 /* --------------------------------------------------------------- fixtures */
 
@@ -234,7 +256,7 @@ check("closed modals render nothing",
   render(<FAQModal isOpen={false} onClose={noop} />) === "" &&
   render(<TermsModal isOpen={false} onClose={noop} />) === "" &&
   render(<SupportModal isOpen={false} onClose={noop} />) === "" &&
-  render(<SubmitModal isOpen={false} onClose={noop} onSubmitTool={noop} />) === "" &&
+  render(<SubmitModal isOpen={false} onClose={noop} onSubmitTool={submitSpy} />) === "" &&
   render(<AuthModal isOpen={false} initialMode="login" onClose={noop} />) === "");
 
 const faqHtml = render(<FAQModal isOpen onClose={noop} />);
@@ -360,12 +382,14 @@ check("Admin queue renders for allow-listed admins",
     />,
   ).includes("Pending Review Queue"));
 
-const submitHtml = render(<SubmitModal isOpen onClose={noop} onSubmitTool={noop} />);
+const submitHtml = render(<SubmitModal isOpen onClose={noop} onSubmitTool={submitSpy} />);
 check("Submit modal renders both tiers and the free path",
   submitHtml.includes("Free Submission") &&
   submitHtml.includes("INSTANT LAUNCH") &&
   submitHtml.includes("Auto-fill Details") &&
   submitHtml.includes("Submit 100% Free ($0) to Queue"));
+check("rendering the submit modal (or its paid tier) writes nothing by itself",
+  submitCalls.length === 0);
 
 check("(showcase) code viewer renders the blueprint corpus",
   render(<CodeViewerModal isOpen onClose={noop} />).includes("Stack Highlights:"));
@@ -565,6 +589,10 @@ const buildPaddleEvent = (toolId: string, websiteUrl = ""): PaddleEvent => {
         tool_slug: "docuvector-ai",
         website_url: websiteUrl,
         customer_email: "buyer@example.com",
+        category: "AI & Machine Learning",
+        pricing_type: "Paid",
+        tagline: "Contract intelligence for compliance teams",
+        description: "Contract intelligence for compliance teams",
       },
       details: { totals: { total: "500", grand_total: "500", currency_code: "USD" } },
       items: [
@@ -764,6 +792,356 @@ check("the round trip approves the exact row the buyer paid for",
   JSON.parse(
     roundTripBackend.calls.find((call) => call.url.includes("/rest/v1/tools"))?.body ?? "{}",
   ).status === "approved");
+
+/* ------------------------------------------------ paid-tier write gating */
+
+section("src/lib/paddleCheckout.ts - when the paid row may be written");
+
+check("Paddle Billing's `name` field is understood",
+  readPaddleEventName({ name: PADDLE_CHECKOUT_COMPLETED }) === PADDLE_CHECKOUT_COMPLETED);
+check("legacy `event_type` payloads still resolve",
+  isPaddleCheckoutCompleted({ event_type: PADDLE_CHECKOUT_COMPLETED }));
+check("only a completed checkout counts as paid",
+  !isPaddleCheckoutCompleted({ name: "checkout.loaded" }) &&
+  !isPaddleCheckoutCompleted({}) &&
+  !isPaddleCheckoutCompleted(null) &&
+  !isPaddleCheckoutCompleted(undefined));
+check("closing or erroring the overlay releases the held listing",
+  isPaddleCheckoutAbandoned({ name: "checkout.closed" }) &&
+  isPaddleCheckoutAbandoned({ event_type: "checkout.error" }));
+check("a completed checkout is never treated as abandoned",
+  !isPaddleCheckoutAbandoned({ name: PADDLE_CHECKOUT_COMPLETED }));
+check("a duplicate-key insert on the paid path counts as already handled",
+  isDuplicateRowError({ code: "23505" }) &&
+  isDuplicateRowError({ message: 'duplicate key value violates unique constraint "tools_pkey"' }) &&
+  !isDuplicateRowError({ code: "42501", message: "permission denied" }) &&
+  !isDuplicateRowError(null));
+
+/* ----------------------------------------------- review-queue mutations */
+
+section("src/lib/adminTools.ts - queue mutations");
+
+type ApiCall = { url: string; method: string; body: string; authorization: string; apiKey: string };
+
+const apiCalls: ApiCall[] = [];
+
+const readHeader = (headers: unknown, name: string): string => {
+  if (!headers) return "";
+  const withGet = headers as { get?: (key: string) => string | null };
+  if (typeof withGet.get === "function") return String(withGet.get(name) ?? "");
+  const record = headers as Record<string, string>;
+  return String(record[name] ?? record[name.toLowerCase()] ?? "");
+};
+
+const toApiCall = (
+  input: unknown,
+  init?: { method?: string; body?: unknown; headers?: unknown },
+): ApiCall => ({
+  url: typeof input === "string" ? input : String((input as { url?: string })?.url ?? ""),
+  method: init?.method ?? "GET",
+  body: typeof init?.body === "string" ? init.body : "",
+  authorization: readHeader(init?.headers, "Authorization"),
+  apiKey: readHeader(init?.headers, "apikey"),
+});
+
+/** Fetch double that records the request and answers with a canned payload. */
+const adminApiStub =
+  (result: unknown, status = 200) =>
+  (input: unknown, init?: { method?: string; body?: unknown; headers?: unknown }) => {
+    apiCalls.push(toApiCall(input, init));
+    return jsonResponse(result, status < 400, status);
+  };
+
+apiCalls.length = 0;
+const deletedViaApi = await withFetch(adminApiStub({ success: true, affected: 1 }), () =>
+  callAdminToolAction("delete", "11111111-1111-4111-8111-111111111111", "access-token-1"),
+);
+check("a delete posts its action to the admin endpoint",
+  deletedViaApi.ok &&
+  deletedViaApi.affected === 1 &&
+  apiCalls.length === 1 &&
+  apiCalls[0].url === ADMIN_TOOLS_ENDPOINT &&
+  apiCalls[0].method === "POST" &&
+  JSON.parse(apiCalls[0].body).action === "delete",
+  JSON.stringify(apiCalls[0] ?? null));
+check("the mutation carries the admin's Supabase access token",
+  apiCalls[0]?.authorization === "Bearer access-token-1");
+
+const rejectedCall = await withFetch(
+  adminApiStub({ success: false, error: "not an admin" }, 403),
+  () => callAdminToolAction("delete", "abc", "access-token-1"),
+);
+check("a 403 is surfaced with its message and is not 'unavailable'",
+  !rejectedCall.ok &&
+  rejectedCall.status === 403 &&
+  !isAdminApiUnavailable(rejectedCall) &&
+  rejectedCall.error === "not an admin");
+
+const brokenServer = await withFetch(
+  adminApiStub({ success: false, error: "no service key" }, 500),
+  () => callAdminToolAction("delete", "abc", "access-token-1"),
+);
+check("a 500 counts as 'unavailable' so the queue may fall back",
+  !brokenServer.ok && isAdminApiUnavailable(brokenServer));
+
+const offlineCall = await withFetch(
+  () => {
+    throw new Error("network down");
+  },
+  () => callAdminToolAction("delete", "abc", "access-token-1"),
+);
+check("an unreachable endpoint reports status 0 and never throws",
+  !offlineCall.ok &&
+  offlineCall.status === 0 &&
+  isAdminApiUnavailable(offlineCall) &&
+  offlineCall.error === "network down");
+
+apiCalls.length = 0;
+const blankIdCall = await withFetch(adminApiStub({ success: true, affected: 1 }), () =>
+  callAdminToolAction("delete", "   ", "access-token-1"),
+);
+const noTokenCall = await withFetch(adminApiStub({ success: true, affected: 1 }), () =>
+  callAdminToolAction("delete", "abc", ""),
+);
+check("a blank id or a missing token is rejected locally, without any request",
+  blankIdCall.status === 400 && noTokenCall.status === 401 && apiCalls.length === 0);
+
+/* ---------------------------------------------------- admin api handler */
+
+section("api/admin-tools.ts - service-role moderation");
+
+const adminEnv = {
+  SUPABASE_URL: "https://project.supabase.co",
+  SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+  ADMIN_EMAILS: "admin@example.com",
+};
+
+const adminUser = { id: "u1", email: "admin@example.com", app_metadata: {} };
+const deleteRowId = createToolId();
+
+const createAdminStub = (options: { rows?: unknown[]; user?: unknown | null } = {}) => {
+  const rows = options.rows ?? [{}];
+  const user = options.user === undefined ? adminUser : options.user;
+  const calls: ApiCall[] = [];
+  const stub = (input: unknown, init?: { method?: string; body?: unknown; headers?: unknown }) => {
+    const url = typeof input === "string" ? input : String((input as { url?: string })?.url ?? "");
+    calls.push(toApiCall(input, init));
+    if (url.includes("/auth/v1/user")) {
+      return user ? jsonResponse(user) : jsonResponse({ message: "invalid token" }, false, 401);
+    }
+    if (url.includes("/rest/v1/tools")) return jsonResponse(rows);
+    return jsonResponse({}, false, 404);
+  };
+  return { stub, calls };
+};
+
+const invokeAdmin = (
+  toolStub: (input: unknown, init?: { method?: string; body?: unknown; headers?: unknown }) => unknown,
+  options: {
+    action?: string;
+    toolId?: string;
+    token?: string | null;
+    env?: Record<string, string | undefined>;
+  } = {},
+) =>
+  withEnv({ ...adminEnv, ...(options.env ?? {}) }, () =>
+    withFetch(toolStub, () =>
+      invoke(adminToolsHandler, {
+        headers:
+          options.token === null
+            ? {}
+            : { authorization: `Bearer ${options.token ?? "session-jwt"}` },
+        body: JSON.stringify({
+          action: options.action ?? "delete",
+          toolId: options.toolId ?? deleteRowId,
+        }),
+      }),
+    ),
+  );
+
+check("GET is rejected with 405", (await invoke(adminToolsHandler, { method: "GET" })).status === 405);
+
+const unknownAction = await invokeAdmin(createAdminStub().stub, { action: "drop_everything" });
+check("an unknown action is rejected with 400",
+  unknownAction.status === 400, JSON.stringify(unknownAction.body));
+
+const anonymousBackend = createAdminStub();
+const anonymousDelete = await invokeAdmin(anonymousBackend.stub, { token: null });
+check("a delete without a session token is rejected before any database call",
+  anonymousDelete.status === 401 && anonymousBackend.calls.length === 0,
+  JSON.stringify(anonymousDelete.body));
+
+const forgedDelete = await invokeAdmin(createAdminStub({ user: null }).stub);
+check("a token Supabase does not recognise is rejected with 401", forgedDelete.status === 401);
+
+const intruderDelete = await invokeAdmin(
+  createAdminStub({ user: { id: "u2", email: "intruder@example.com", app_metadata: {} } }).stub,
+);
+check("an authenticated non-admin is rejected with 403",
+  intruderDelete.status === 403, JSON.stringify(intruderDelete.body));
+
+const deleteBackend = createAdminStub();
+const deleteResponse = await invokeAdmin(deleteBackend.stub);
+const restDeleteCall = deleteBackend.calls.find((call) => call.url.includes("/rest/v1/tools"));
+check("a verified admin delete reports the row it removed",
+  deleteResponse.status === 200 &&
+  deleteResponse.body?.success === true &&
+  deleteResponse.body?.affected === 1,
+  JSON.stringify(deleteResponse.body));
+check("the access token is verified against Supabase before the write",
+  deleteBackend.calls.some((call) => call.url.includes("/auth/v1/user")),
+  JSON.stringify(deleteBackend.calls.map((call) => call.url)));
+check("the delete targets the requested row with the service-role key",
+  restDeleteCall?.method === "DELETE" &&
+  restDeleteCall.url.includes(`id=eq.${deleteRowId}`) &&
+  `${restDeleteCall.authorization}${restDeleteCall.apiKey}`.includes("service-role-key"),
+  JSON.stringify(restDeleteCall ?? null));
+
+const noMatchDelete = await invokeAdmin(createAdminStub({ rows: [] }).stub);
+check("a delete that matches no row reports 404 instead of pretending to work",
+  noMatchDelete.status === 404, JSON.stringify(noMatchDelete.body));
+
+const approveBackend = createAdminStub();
+const approveResult = await invokeAdmin(approveBackend.stub, { action: "approve" });
+const approveApiCall = approveBackend.calls.find((call) => call.url.includes("/rest/v1/tools"));
+const approveBody = JSON.parse(approveApiCall?.body ?? "{}") as Record<string, unknown>;
+check("approve keeps status and is_approved in agreement",
+  approveResult.status === 200 &&
+  approveApiCall?.method === "PATCH" &&
+  approveBody.status === "approved" &&
+  approveBody.is_approved === true,
+  JSON.stringify(approveBody));
+
+const roleAdminResult = await invokeAdmin(
+  createAdminStub({ user: { id: "u3", email: "someone@else.dev", app_metadata: { role: "admin" } } }).stub,
+  { env: { ADMIN_EMAILS: undefined, VITE_ADMIN_EMAILS: undefined, VITE_ADMIN_EMAIL: undefined } },
+);
+check("an app_metadata admin role is honoured with no allow-list configured",
+  roleAdminResult.status === 200, JSON.stringify(roleAdminResult.body));
+
+const publicAllowListResult = await invokeAdmin(
+  createAdminStub({ user: { id: "u4", email: "second@example.com", app_metadata: {} } }).stub,
+  { env: { ADMIN_EMAILS: undefined, VITE_ADMIN_EMAILS: "second@example.com" } },
+);
+check("VITE_ADMIN_EMAILS works for single-variable deployments",
+  publicAllowListResult.status === 200, JSON.stringify(publicAllowListResult.body));
+
+const missingServiceKey = await invokeAdmin(createAdminStub().stub, {
+  env: { SUPABASE_SERVICE_ROLE_KEY: undefined },
+});
+check("a missing service-role key is reported as a 500 configuration error",
+  missingServiceKey.status === 500, JSON.stringify(missingServiceKey.body));
+
+/* ------------------------------------ paid listing created by the webhook */
+
+section("api/paddle-webhook.ts - paid listing created when no row exists");
+
+const orphanId = createToolId();
+const orphanEvent = buildPaddleEvent(orphanId, "https://orphan.app");
+const orphanBackend = createBackendStub([]);
+const orphanResult = await withEnv(productionEnv, () =>
+  withFetch(orphanBackend.stub, () =>
+    invoke(paddleWebhookHandler, {
+      body: orphanEvent.raw,
+      headers: { "paddle-signature": sign(orphanEvent.raw) },
+    }),
+  ),
+);
+check("a paid checkout with no matching row still succeeds",
+  orphanResult.status === 200 && orphanResult.body?.success === true,
+  JSON.stringify(orphanResult.body));
+
+const insertCall = orphanBackend.calls.find(
+  (call) => call.method === "POST" && call.url.includes("/rest/v1/tools"),
+);
+const insertedRow = JSON.parse(insertCall?.body ?? "{}") as Record<string, unknown>;
+check("the missing listing is created with the id Paddle sent",
+  Boolean(insertCall) && insertedRow.id === orphanId, JSON.stringify(insertedRow));
+check("the created listing is live, featured and approved",
+  insertedRow.is_approved === true &&
+  insertedRow.is_featured === true &&
+  insertedRow.status === "approved");
+check("the created listing reuses the signed custom_data",
+  insertedRow.name === "DocuVector AI" &&
+  insertedRow.website_url === "https://orphan.app" &&
+  insertedRow.category === "AI & Machine Learning" &&
+  insertedRow.pricing_type === "Paid",
+  JSON.stringify(insertedRow));
+check("the buyer's Paddle customer id is recorded on the row",
+  insertedRow.paddle_customer_id === "ctm_1");
+check("the response reports that the listing had to be created",
+  orphanResult.body?.created === true);
+check("a listing created from custom_data still triggers the buyer receipt",
+  (JSON.parse(
+    orphanBackend.calls.find((call) => call.url.includes("/api/send-email"))?.body ?? "{}",
+  ) as Record<string, unknown>).toolName === "DocuVector AI");
+
+const bareEvent = JSON.stringify({
+  event_id: "evt_bare",
+  event_type: "transaction.completed",
+  data: { id: "txn_bare", customer_id: "ctm_9", custom_data: { tool_id: orphanId } },
+});
+const bareBackend = createBackendStub([]);
+const bareResult = await withEnv(productionEnv, () =>
+  withFetch(bareBackend.stub, () =>
+    invoke(paddleWebhookHandler, {
+      body: bareEvent,
+      headers: { "paddle-signature": sign(bareEvent) },
+    }),
+  ),
+);
+check("an unmatched payment with no tool_name/website_url is never fabricated",
+  bareResult.status === 200 &&
+  bareResult.body?.created === false &&
+  !bareBackend.calls.some((call) => call.method === "POST"),
+  JSON.stringify(bareResult.body));
+
+// Race: the browser inserted its own row between our two lookups, so the insert
+// hits the primary key. The webhook must upgrade that row instead of failing.
+const raceId = createToolId();
+const raceEvent = buildPaddleEvent(raceId, "https://race.app");
+const raceBackend = (() => {
+  const calls: FetchCall[] = [];
+  let toolLookups = 0;
+  const stub = (input: unknown, init?: { method?: string; body?: unknown }) => {
+    const url = typeof input === "string" ? input : String((input as { url?: string })?.url ?? "");
+    calls.push({
+      url,
+      method: init?.method ?? "GET",
+      body: typeof init?.body === "string" ? init.body : "",
+    });
+    if (!url.includes("/rest/v1/tools")) return jsonResponse({ success: true });
+    if (init?.method === "POST") {
+      return jsonResponse({ code: "23505", message: "duplicate key value violates unique constraint" }, false, 409);
+    }
+    toolLookups += 1;
+    return toolLookups <= 2
+      ? jsonResponse([])
+      : jsonResponse([
+          {
+            id: raceId,
+            name: "DocuVector AI",
+            category: "AI & Machine Learning",
+            pricing_type: "Paid",
+            website_url: "https://race.app",
+          },
+        ]);
+  };
+  return { stub, calls };
+})();
+const raceResult = await withEnv(productionEnv, () =>
+  withFetch(raceBackend.stub, () =>
+    invoke(paddleWebhookHandler, {
+      body: raceEvent.raw,
+      headers: { "paddle-signature": sign(raceEvent.raw) },
+    }),
+  ),
+);
+check("a listing that appears mid-insert is upgraded instead of failing the webhook",
+  raceResult.status === 200 &&
+  raceResult.body?.created !== true &&
+  raceBackend.calls.filter((call) => call.method === "PATCH").length === 3,
+  JSON.stringify(raceResult.body));
 
 /* ---------------------------------------------------------------- summary */
 

@@ -39,6 +39,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSubmit, onOpenAuth, onOpen
         <div className="flex items-center gap-2">
           {!isAuthenticated && onOpenAuth && (
             <button
+              type="button"
               id="btn-login-header"
               onClick={() => onOpenAuth("login")}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium text-slate-700 hover:text-slate-900 border border-slate-300 hover:border-slate-400 bg-white transition-all active:scale-95"
@@ -50,6 +51,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSubmit, onOpenAuth, onOpen
 
           {!isAuthenticated && onOpenAuth && (
             <button
+              type="button"
               id="btn-signup-header"
               onClick={() => onOpenAuth("signup")}
               className="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-4 py-1.5 rounded-lg text-sm shadow-sm transition-all active:scale-95"
@@ -69,6 +71,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSubmit, onOpenAuth, onOpen
           )}
           {isAdmin && onOpenAdminQueue && (
             <button
+              type="button"
               onClick={onOpenAdminQueue}
               className="inline-flex items-center gap-1.5 text-slate-600 hover:text-slate-900 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium transition"
             >
@@ -78,11 +81,11 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSubmit, onOpenAuth, onOpen
           )}
           {isAuthenticated && (
             <>
-              <button id="btn-submit-app-header" onClick={onOpenSubmit} className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-medium px-4 py-1.5 rounded-lg text-sm shadow-sm transition-all active:scale-95">
+              <button type="button" id="btn-submit-app-header" onClick={onOpenSubmit} className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-medium px-4 py-1.5 rounded-lg text-sm shadow-sm transition-all active:scale-95">
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>Submit App</span>
               </button>
-              <button onClick={onSignOut} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-slate-900 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium transition" title="Sign out">
+              <button type="button" onClick={onSignOut} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-slate-900 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium transition" title="Sign out">
                 <LogOut className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Sign Out</span>
               </button>

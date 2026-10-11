@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ChevronDown, HelpCircle, Mail, X } from "lucide-react";
+import { useModalDismiss } from "../lib/useModalDismiss";
 
 const FAQ_ITEMS = [
   {
@@ -34,6 +35,9 @@ export const FAQModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   onClose,
 }) => {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  // Escape closes the modal and the directory behind it stops scrolling.
+  useModalDismiss(isOpen, onClose);
 
   if (!isOpen) return null;
 

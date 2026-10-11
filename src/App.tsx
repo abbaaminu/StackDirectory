@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Search, X, CheckCircle2, ShoppingBag, LayoutGrid, ArrowUpDown, Clock, Tag, TrendingUp } from "lucide-react";
 import supabase, { isSupabaseConfigured, pendingToolDefaults } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
@@ -10,8 +10,13 @@ import {
 } from "./types/directory";
 import { buildCategoryOptions, matchesToolFilters, sortTools } from "./lib/toolFilters";
 import { isAdminUser } from "./lib/admin";
+import {
+  type AdminToolAction,
+  callAdminToolAction,
+  isAdminApiUnavailable,
+} from "./lib/adminTools";
 import { getToolSlug } from "./lib/toolSlug";
-import { buildToolInsertRow } from "./lib/submissions";
+import { buildToolInsertRow, isDuplicateRowError } from "./lib/submissions";
 import {
   readJsonArray,
   readStringArray,
@@ -80,6 +85,8 @@ export default function App() {
 
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  /** Pending auto-hide timer for the visible toast. */
+  const toastTimerRef = useRef<number | null>(null);
   const isAuthenticated = Boolean(session || localAuthenticated);
 
   const openToolDetails = (tool: Tool) => {
@@ -154,6 +161,43 @@ export default function App() {
     fetchApprovedTools();
   }, [fetchApprovedTools]);
 
+  /**
+   * Hides the visible toast and cancels its pending timer. Only one toast is on
+   * screen at a time, so the previous timer must be cleared before the next one
+   * is scheduled - otherwise the earlier toast's timer would hide the newer
+   * message seconds before its own 4s window is over.
+   */
+  const dismissToast = useCallback(() => {
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setToastMessage(null);
+  }, []);
+
+  const showToast = useCallback(
+    (message: string) => {
+      dismissToast();
+      setToastMessage(message);
+      toastTimerRef.current = window.setTimeout(() => {
+        toastTimerRef.current = null;
+        setToastMessage(null);
+      }, 4000);
+    },
+    [dismissToast],
+  );
+
+  // Never leave a timer running once the app that owns the toast is gone.
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  // Keep the Supabase session in sync and confirm the sign-in to the visitor.
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
     void supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -162,19 +206,18 @@ export default function App() {
       if (nextSession) showToast("Authentication state updated.");
     });
     return () => data.subscription.unsubscribe();
-  }, []);
+  }, [showToast]);
 
-  const showToast = (message: string) => {
-    setToastMessage(message);
-    setTimeout(() => setToastMessage(null), 4000);
-  };
-
-/** True for Supabase users whose email is allow-listed or whose
- *  `app_metadata.role` is `"admin"`. The review queue is only mounted for
- *  admins, and it re-checks internally (see lib/admin.ts). */
+  /** True for Supabase users whose email is allow-listed or whose
+   *  `app_metadata.role` is `"admin"`. The review queue is only mounted for
+   *  admins, and it re-checks internally (see lib/admin.ts). */
   const isAdmin = isAdminUser(session?.user);
 
-  const updateAdminTool = async (toolId: string, updates: Partial<Tool>) => {
+  const updateAdminTool = async (
+    toolId: string,
+    updates: Partial<Tool>,
+    action: AdminToolAction,
+  ) => {
     if (!isSupabaseConfigured || !supabase) {
       const next = readJsonArray<Tool>(STORAGE_KEYS.tools).map((tool) =>
         tool.id === toolId ? { ...tool, ...updates } : tool,
@@ -183,9 +226,32 @@ export default function App() {
       await fetchApprovedTools();
       return;
     }
-    const { error } = await supabase.from("tools").update(updates as never).eq("id", toolId);
-    if (error) {
-      showToast("Could not update this listing.");
+
+    // The review queue's Feature / For Sale toggles go through the same
+    // service-role endpoint as its delete button: a write that Row Level
+    // Security filters out reports no error at all, so the server's row count
+    // (not the absence of an `error`) is what proves the update happened.
+    const token = session?.access_token ?? null;
+    if (token) {
+      const result = await callAdminToolAction(action, toolId, token);
+      if (result.ok) {
+        await fetchApprovedTools();
+        return;
+      }
+      if (!isAdminApiUnavailable(result)) {
+        showToast(`❌ ${result.error ?? "Could not update this listing."}`);
+        return;
+      }
+    }
+
+    const { data: updatedRows, error } = await supabase
+      .from("tools")
+      .update(updates as never)
+      .eq("id", toolId)
+      .select("id");
+
+    if (error || !Array.isArray(updatedRows) || updatedRows.length === 0) {
+      showToast("❌ Could not update this listing (the write was blocked or matched no row).");
       return;
     }
     await fetchApprovedTools();
@@ -198,9 +264,14 @@ export default function App() {
   };
 
   // Submit a new tool into Supabase (goes to review queue with is_approved = false)
-  const handleSubmitTool = async (newTool: Tool) => {
+  //
+  // `isPaddleCheckout` is true only when the caller is the paid $5 Featured flow
+  // **after** Paddle confirmed the payment (see SubmitModal.tsx). In that case a
+  // persistence failure must surface as an error - never as a local-only save -
+  // because the customer has already paid for a Featured slot.
+  const handleSubmitTool = async (newTool: Tool, isPaddleCheckout = false) => {
     // The client-generated id is persisted explicitly: the Paddle webhook
-    // upgrades the row whose id matches custom_data.tool_id
+    // upgrades (or inserts) the row whose id matches custom_data.tool_id
     // (see lib/submissions.ts).
     const row = buildToolInsertRow(newTool);
 
@@ -220,6 +291,11 @@ export default function App() {
     };
 
     if (!isSupabaseConfigured || !supabase) {
+      if (isPaddleCheckout) {
+        throw new Error(
+          "Supabase is not configured, so the paid Featured listing could not be saved.",
+        );
+      }
       await saveSubmissionLocally();
       return;
     }
@@ -228,14 +304,37 @@ export default function App() {
 
     if (error) {
       console.error("Failed to submit tool:", error.message);
+      // A paid listing can hit the primary key when api/paddle-webhook.ts got
+      // to the payment first and already created this exact id: the customer has
+      // the Featured listing they paid for, so this is a success, not an error.
+      if (isPaddleCheckout && isDuplicateRowError(error)) {
+        showToast(`✅ Payment received — "${newTool.name}" is already live as a Featured listing.`);
+        await fetchApprovedTools();
+        return;
+      }
+      if (isPaddleCheckout) {
+        throw new Error(error.message);
+      }
       await saveSubmissionLocally();
       return;
     }
 
     showToast(
-      `📋 "${newTool.name}" submitted for review and will appear once approved.`,
+      isPaddleCheckout
+        ? `✅ Payment received — "${newTool.name}" is queued and the Paddle webhook is activating its Featured slot.`
+        : `📋 "${newTool.name}" submitted for review and will appear once approved.`,
     );
     await fetchApprovedTools();
+  };
+
+  /**
+   * Drops a listing that an admin deleted from the review queue, so the grid and
+   * any open detail modal stop showing a row that no longer exists.
+   */
+  const handleToolDeleted = (toolId: string) => {
+    setTools((current) => current.filter((tool) => tool.id !== toolId));
+    setSelectedDetailTool((current) => (current?.id === toolId ? null : current));
+    showToast("🗑️ Listing deleted from Supabase.");
   };
 
   // Toggle upvote: increment/decrement upvotes in Supabase
@@ -368,7 +467,9 @@ export default function App() {
             <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
             <span>{toastMessage}</span>
             <button
-              onClick={() => setToastMessage(null)}
+              type="button"
+              onClick={dismissToast}
+              aria-label="Dismiss notification"
               className="text-slate-400 hover:text-slate-900 ml-auto"
             >
               <X className="w-4 h-4" />
@@ -390,6 +491,7 @@ export default function App() {
           {/* View Mode Toggle */}
           <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-1 gap-1 shadow-sm">
             <button
+              type="button"
               onClick={() => setViewMode("all")}
               className={[
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition",
@@ -402,6 +504,7 @@ export default function App() {
               All Apps
             </button>
             <button
+              type="button"
               onClick={() => setViewMode("for_sale")}
               className={[
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition",
@@ -424,6 +527,7 @@ export default function App() {
             <div className="flex flex-wrap gap-1.5">
               {PRICING_FILTER_OPTIONS.map((filter) => (
                 <button
+                  type="button"
                   key={filter}
                   onClick={() => setPricingFilter(filter)}
                   className={[
@@ -452,6 +556,7 @@ export default function App() {
           />
           {searchQuery && (
             <button
+              type="button"
               onClick={() => setSearchQuery("")}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900"
             >
@@ -604,6 +709,7 @@ export default function App() {
                 : "No tools match your current filters."}
             </p>
             <button
+              type="button"
               onClick={() => {
                 setSearchQuery("");
                 setPricingFilter("All");
@@ -630,8 +736,8 @@ export default function App() {
               Find the tools that make your next product faster, then discover proven micro-SaaS businesses ready for their next chapter. Join a focused community where makers share useful software, earn recognition, and connect with serious buyers.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row justify-center gap-3">
-              <button onClick={() => { setAuthMode("signup"); setIsAuthOpen(true); }} className="inline-flex items-center justify-center rounded-xl bg-amber-400 px-6 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-amber-400/20 hover:bg-amber-300 transition">Sign Up Free</button>
-              <button onClick={() => { setAuthMode("login"); setIsAuthOpen(true); }} className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-bold text-slate-800 hover:border-slate-400 hover:bg-slate-50 transition">Log In</button>
+              <button type="button" onClick={() => { setAuthMode("signup"); setIsAuthOpen(true); }} className="inline-flex items-center justify-center rounded-xl bg-amber-400 px-6 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-amber-400/20 hover:bg-amber-300 transition">Sign Up Free</button>
+              <button type="button" onClick={() => { setAuthMode("login"); setIsAuthOpen(true); }} className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-bold text-slate-800 hover:border-slate-400 hover:bg-slate-50 transition">Log In</button>
             </div>
             <div className="mt-10 flex flex-wrap justify-center gap-2">
               {["Discover", "Upvote", "Acquire"].map((feature) => <span key={feature} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm">{feature}</span>)}
@@ -707,8 +813,9 @@ export default function App() {
         isOpen={isAdminQueueOpen}
         onClose={() => setIsAdminQueueOpen(false)}
         user={session?.user}
-        onSetFeature={(toolId, isFeatured) => void updateAdminTool(toolId, { is_featured: isFeatured })}
-        onSetForSale={(toolId, isForSale) => void updateAdminTool(toolId, { is_for_sale: isForSale })}
+        onSetFeature={(toolId, isFeatured) => void updateAdminTool(toolId, { is_featured: isFeatured }, isFeatured ? "feature" : "unfeature")}
+        onSetForSale={(toolId, isForSale) => void updateAdminTool(toolId, { is_for_sale: isForSale }, isForSale ? "for_sale" : "unlist")}
+        onToolDeleted={handleToolDeleted}
       />}
 
       <Footer

@@ -32,6 +32,24 @@ const uuidV4 = (): string => {
 export const createToolId = (): string => uuidV4();
 
 /**
+ * True when an insert failed only because that row already exists (`23505`).
+ *
+ * The paid flow needs this: SubmitModal inserts the listing when Paddle reports
+ * `checkout.completed`, while api/paddle-webhook.ts creates the very same row
+ * (`custom_data.tool_id`) when the buyer never returns to the tab. Whichever
+ * wins the race, the customer ends up with their Featured listing — so a
+ * duplicate-key error on the paid path means "already handled", not "failed".
+ * (The webhook keeps its own copy: `api/` must not import this module, which
+ * pulls in the browser Supabase client.)
+ */
+export const isDuplicateRowError = (
+  error: { code?: string; message?: string } | null | undefined,
+): boolean => {
+  if (!error) return false;
+  return error.code === "23505" || /duplicate key/i.test(error.message ?? "");
+};
+
+/**
  * `public.tools` row for a new submission: explicit id (see `createToolId`),
  * moderation defaults, and the marketplace columns the schema requires.
  */
