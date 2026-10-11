@@ -147,7 +147,13 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
         setMessages((current) => current.some((item) => item.id === (payload.new as DealMessage).id) ? current : [...current, payload.new as DealMessage]);
       })
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    // `supabase` is re-checked here: the guard above does not survive into this
+    // closure because the imported binding is not narrowing-stable (ts18047).
+    return () => {
+      if (supabase) {
+        void supabase.removeChannel(channel);
+      }
+    };
   }, [conversation, isOpen]);
 
   if (!isOpen || !tool) return null;
