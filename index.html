@@ -3,6 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0F172A" />
+    <meta
+      name="robots"
+      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+    />
+    <meta name="author" content="StackDirectory" />
+    <meta name="application-name" content="StackDirectory" />
+    <meta
+      name="keywords"
+      content="developer tools directory, micro-SaaS for sale, acquire a startup, indie developer tools, startup marketplace, AI tools, SaaS marketplace, buy a SaaS business"
+    />
+    <link rel="canonical" href="https://apps.stackbuildco.com/" />
     
     <!-- Favicon (Inline Data URI for guaranteed display) -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230F172A'/><path d='M16 25L7 20L16 15L25 20L16 25Z' fill='%23F59E0B' opacity='0.4'/><path d='M16 20L7 15L16 10L25 15L16 20Z' fill='%23F59E0B' opacity='0.75'/><path d='M16 15L7 10L16 5L25 10L16 15Z' fill='%23F59E0B'/><path d='M16 7L16.6 8.5L18.2 8.7L17 9.8L17.3 11.4L16 10.6L14.7 11.4L15 9.8L13.8 8.7L15.4 8.5L16 7Z' fill='%23FFFFFF'/></svg>" />
@@ -20,8 +32,19 @@
       content="Discover, upvote, and acquire the best developer tools and micro-SaaS products on StackDirectory."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://apps.stackbuildco.com" />
+    <meta property="og:url" content="https://apps.stackbuildco.com/" />
+    <meta property="og:site_name" content="StackDirectory" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:image" content="https://apps.stackbuildco.com/api/og" />
+    <meta property="og:image:url" content="https://apps.stackbuildco.com/api/og" />
+    <meta property="og:image:secure_url" content="https://apps.stackbuildco.com/api/og" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="StackDirectory — discover, upvote, and acquire developer tools and micro-SaaS products"
+    />
 
     <!-- Twitter Meta Tags -->
     <meta name="twitter:card" content="summary_large_image" />
@@ -31,9 +54,74 @@
       content="Discover, upvote, and acquire the best developer tools and micro-SaaS products on StackDirectory."
     />
     <meta name="twitter:image" content="https://apps.stackbuildco.com/api/og" />
+    <meta
+      name="twitter:image:alt"
+      content="StackDirectory — discover, upvote, and acquire developer tools and micro-SaaS products"
+    />
+    <meta name="twitter:url" content="https://apps.stackbuildco.com/" />
 
     <!-- Paddle.js V2 SDK -->
     <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+
+    <!-- JSON-LD Structured Data (Schema.org: WebSite, Organization & SoftwareApplication) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://apps.stackbuildco.com/#website",
+            "url": "https://apps.stackbuildco.com/",
+            "name": "StackDirectory",
+            "alternateName": "StackDirectory — Startup Marketplace & Discovery",
+            "description": "Discover, upvote, and acquire the best developer tools and micro-SaaS products on StackDirectory.",
+            "inLanguage": "en-US",
+            "image": "https://apps.stackbuildco.com/api/og",
+            "publisher": { "@id": "https://apps.stackbuildco.com/#organization" }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://apps.stackbuildco.com/#organization",
+            "name": "StackDirectory",
+            "url": "https://apps.stackbuildco.com/",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://apps.stackbuildco.com/favicon.svg"
+            },
+            "email": "support@stackbuildco.com"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://apps.stackbuildco.com/#software",
+            "name": "StackDirectory",
+            "url": "https://apps.stackbuildco.com/",
+            "description": "A discovery and acquisition marketplace for developer tools and micro-SaaS startups. Browse approved tools, upvote your favorites, submit an app for free, boost it with a $5 Featured launch via Paddle, or acquire a profitable software business.",
+            "applicationCategory": "BusinessApplication",
+            "applicationSubCategory": "Marketplace",
+            "operatingSystem": "Web",
+            "browserRequirements": "Requires JavaScript. Requires HTML5.",
+            "inLanguage": "en-US",
+            "isAccessibleForFree": true,
+            "image": "https://apps.stackbuildco.com/api/og",
+            "screenshot": "https://apps.stackbuildco.com/api/og",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "featureList": [
+              "Discover and search developer tools and micro-SaaS apps",
+              "Upvote listings to power community rankings",
+              "Free directory submission with 24-48h manual review",
+              "$5 Featured launch with instant approval via Paddle",
+              "Startup acquisition marketplace with private buyer offers",
+              "Deal Room for founder and buyer negotiations"
+            ],
+            "publisher": { "@id": "https://apps.stackbuildco.com/#organization" }
+          }
+        ]
+      }
+    </script>
   </head>
   <body class="bg-slate-950 text-slate-100 antialiased">
     <div id="root"></div>

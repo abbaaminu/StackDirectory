@@ -57,7 +57,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const priceId = import.meta.env.VITE_PADDLE_PRICE_ID || import.meta.env.VITE_PADDLE_FEATURED_PRICE_ID;
+  const priceId = import.meta.env.VITE_PADDLE_PRICE_ID;
   const clientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN;
 
   const getUrlDetails = (value: string) => {
@@ -344,7 +344,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
           </h2>
           <p className="text-xs sm:text-sm text-zinc-400 mt-1">
             Standard directory listings are 100% free. Upgrade to Featured
-            Launch with Paddle ($19).
+            Launch with Paddle ($5).
           </p>
         </div>
 
@@ -416,7 +416,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               </p>
             </div>
 
-            {/* Paddle Featured Tier ($19) */}
+            {/* Paddle Featured Tier ($5) */}
             <div
               onClick={() =>
                 setFormData({ ...formData, tier: "paddle_featured" })
@@ -434,11 +434,11 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 <div className="flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
                   <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
-                    PADDLE FEATURED $19
+                    PADDLE FEATURED $5
                   </span>
                 </div>
                 <span className="text-sm font-black text-amber-400 mr-12">
-                  $19
+                  $5
                 </span>
               </div>
               <p className="text-[11px] text-zinc-300 mt-2 leading-relaxed">
@@ -732,7 +732,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               {formData.tier === "paddle_featured" && (
                 <div>
                   <label className="text-xs font-medium text-amber-300 mb-1 flex items-center gap-1">
-                    <Lock className="w-3 h-3" /> Billing Email (Paddle $19)
+                    <Lock className="w-3 h-3" /> Billing Email (Paddle $5)
                   </label>
                   <input
                     type="email"
@@ -802,7 +802,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                   ) : (
                     <>
                       <CreditCard className="w-3.5 h-3.5" />
-                      <span>Pay $19 with Paddle</span>
+                      <span>Pay $5 with Paddle</span>
                     </>
                   )}
                 </button>

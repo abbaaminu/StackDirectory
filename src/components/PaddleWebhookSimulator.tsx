@@ -36,7 +36,7 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
   const [eventType, setEventType] = useState<
     "transaction.completed" | "transaction.created"
   >("transaction.completed");
-  const [amount, setAmount] = useState("19.00");
+  const [amount, setAmount] = useState("5.00");
   const [isSimulating, setIsSimulating] = useState(false);
   const [webhookResponse, setWebhookResponse] = useState<any | null>(null);
   const [copied, setCopied] = useState(false);

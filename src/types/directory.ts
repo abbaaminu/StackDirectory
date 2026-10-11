@@ -10,6 +10,23 @@ export const PRICING_FILTER_OPTIONS: ReadonlyArray<PricingFilter> = [
   "Paid",
 ];
 
+/** Interactive sort orders available on the directory grid. */
+export type SortOption = "Most Popular" | "Recently Added";
+
+export const SORT_OPTIONS: ReadonlyArray<SortOption> = [
+  "Most Popular",
+  "Recently Added",
+];
+
+/** Sentinel category value that clears the category filter. */
+export const ALL_CATEGORIES = "All Categories";
+
+/** A single interactive category pill (label + number of matching listings). */
+export interface CategoryOption {
+  label: string;
+  count: number;
+}
+
 export interface Tool {
   id: string;
   name: string;

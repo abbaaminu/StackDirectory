@@ -5,7 +5,7 @@ const FAQ_ITEMS = [
   {
     question: "How do I submit my app?",
     answer:
-      "Free submissions enter the moderation queue and are reviewed within 24-48 hours. The $19 Featured Tier offers instant auto-approval and top directory placement.",
+      "Free submissions enter the moderation queue and are reviewed within 24-48 hours. The $5 Featured Tier offers instant auto-approval and top directory placement.",
   },
   {
     question: "How does Acquire Mode / Deal Room work?",

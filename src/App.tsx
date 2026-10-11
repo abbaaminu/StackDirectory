@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, X, CheckCircle2, ShoppingBag, LayoutGrid } from "lucide-react";
+import { Search, X, CheckCircle2, ShoppingBag, LayoutGrid, ArrowUpDown, Clock, Tag, TrendingUp } from "lucide-react";
 import supabase, { isSupabaseConfigured, pendingToolDefaults } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
-import type { Tool, PricingType } from "./types/directory";
+import type { PricingType, SortOption, Tool } from "./types/directory";
+import { ALL_CATEGORIES, SORT_OPTIONS } from "./types/directory";
+import { buildCategoryOptions, matchesToolFilters, sortTools } from "./lib/toolFilters";
 import { INITIAL_TOOLS } from "./data/mockTools";
 import { Header } from "./components/Header";
 import { ToolCard, ToolCardSkeleton } from "./components/ToolCard";
@@ -72,6 +74,8 @@ export default function App() {
     "All",
   );
   const [viewMode, setViewMode] = useState<ViewMode>("all");
+  const [sortOption, setSortOption] = useState<SortOption>("Most Popular");
+  const [categoryFilter, setCategoryFilter] = useState<string>(ALL_CATEGORIES);
 
   // Submit modal
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
@@ -354,38 +358,26 @@ export default function App() {
     showToast(result?.voted ? "Upvote added." : "Upvote removed.");
   };
 
-  // Filter approved tools by view mode, search query and pricing filter
-  const displayedTools = tools.filter((tool) => {
-    if (viewMode === "for_sale" && !tool.is_for_sale) {
-      return false;
-    }
+  // Listings inside the active All Apps / For Sale tab — drives category counts
+  const viewScopedTools = tools.filter(
+    (tool) => viewMode !== "for_sale" || tool.is_for_sale,
+  );
 
-    if (pricingFilter !== "All" && tool.pricing_type !== pricingFilter) {
-      return false;
-    }
+  // Interactive category pills, each labelled with its live listing count
+  const categoryOptions = buildCategoryOptions(viewScopedTools);
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchesName = tool.name.toLowerCase().includes(q);
-      const matchesTagline = tool.tagline.toLowerCase().includes(q);
-      const matchesCategory = tool.category.toLowerCase().includes(q);
-      const matchesDesc = tool.description.toLowerCase().includes(q);
-      const matchesTech = tool.tech_stack?.some((t) =>
-        t.toLowerCase().includes(q),
-      );
-      if (
-        !matchesName &&
-        !matchesTagline &&
-        !matchesCategory &&
-        !matchesDesc &&
-        !matchesTech
-      ) {
-        return false;
-      }
-    }
+  // Filter approved tools by view mode, pricing, category and search query
+  const filteredTools = tools.filter((tool) =>
+    matchesToolFilters(tool, {
+      viewMode,
+      pricingFilter,
+      categoryFilter,
+      searchQuery,
+    }),
+  );
 
-    return true;
-  });
+  // Apply the interactive sort order to a copy so React state stays untouched
+  const displayedTools = sortTools(filteredTools, sortOption);
 
   return (
     <div className="bg-[#F8FAFC] min-h-screen text-slate-900 font-sans relative overflow-x-hidden">
@@ -504,6 +496,101 @@ export default function App() {
           )}
         </div>
 
+        {/* Sort + Category Filter Controls */}
+        <div className="flex flex-col gap-3 mb-4 xl:flex-row xl:items-start xl:justify-between">
+          {/* Sort options: Most Popular / Recently Added */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              Sort
+            </span>
+            <div
+              role="group"
+              aria-label="Sort listings"
+              className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-1 gap-1 shadow-sm"
+            >
+              {SORT_OPTIONS.map((option) => {
+                const isActive = sortOption === option;
+                const SortIcon = option === "Most Popular" ? TrendingUp : Clock;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => setSortOption(option)}
+                    className={[
+                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition",
+                      isActive
+                        ? "bg-slate-900 text-white border-transparent"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent",
+                    ].join(" ")}
+                  >
+                    <SortIcon className="w-3.5 h-3.5" />
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Category filter pills with live listing counts */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+              <Tag className="w-3.5 h-3.5" />
+              Category
+            </span>
+            <div
+              role="group"
+              aria-label="Filter by category"
+              className="flex flex-wrap gap-1.5"
+            >
+              {categoryOptions.map(({ label, count }) => {
+                const isActive = categoryFilter === label;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => setCategoryFilter(label)}
+                    className={[
+                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition whitespace-nowrap",
+                      isActive
+                        ? "bg-amber-500 text-slate-950 border-transparent shadow-sm"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100",
+                    ].join(" ")}
+                  >
+                    {label}
+                    <span
+                      className={[
+                        "rounded-md px-1.5 py-0.5 text-[10px] font-bold",
+                        isActive
+                          ? "bg-slate-950/15 text-slate-950"
+                          : "bg-slate-100 text-slate-500",
+                      ].join(" ")}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Active sort / category summary */}
+        <p className="mb-4 text-xs text-slate-500">
+          Showing{" "}
+          <strong className="text-slate-900">{displayedTools.length}</strong>{" "}
+          {displayedTools.length === 1 ? "listing" : "listings"} sorted by{" "}
+          <strong className="text-slate-900">{sortOption}</strong>
+          {categoryFilter !== ALL_CATEGORIES ? (
+            <>
+              {" "}
+              in <strong className="text-slate-900">{categoryFilter}</strong>
+            </>
+          ) : null}
+        </p>
+
         {loading ? (
           <div
             className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
@@ -556,6 +643,8 @@ export default function App() {
                 setSearchQuery("");
                 setPricingFilter("All");
                 setViewMode("all");
+                setSortOption("Most Popular");
+                setCategoryFilter(ALL_CATEGORIES);
               }}
               className="mt-4 px-4 py-2 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-slate-950 transition"
             >

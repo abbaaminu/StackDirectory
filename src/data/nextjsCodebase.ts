@@ -202,7 +202,7 @@ export default async function HomePage() {
     filepath: "app/api/webhooks/paddle/route.ts",
     language: "typescript",
     description:
-      "Next.js App Router Webhook Route Handler for Paddle ($19 USD Instant Featured). Verifies HMAC signature and upgrades tool.",
+      "Next.js App Router Webhook Route Handler for Paddle ($5 USD Instant Featured). Verifies HMAC signature and upgrades tool.",
     code: `import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase/server';
@@ -267,7 +267,7 @@ export async function POST(req: NextRequest) {
       customerId: data?.customer_id,
     });
 
-    // 2. Handle successful checkout / transaction event ($19 USD Featured Tier)
+    // 2. Handle successful checkout / transaction event ($5 USD Featured Tier)
     if (event_type === 'transaction.completed' || event_type === 'transaction.paid') {
       const customData = data?.custom_data || {};
       const toolId = customData.tool_id;
@@ -306,7 +306,7 @@ export async function POST(req: NextRequest) {
       
       return NextResponse.json({
         success: true,
-        message: 'Tool upgraded to featured tier successfully ($19 USD)',
+        message: 'Tool upgraded to featured tier successfully ($5 USD)',
         tool_id: toolId,
       });
     }
@@ -425,6 +425,6 @@ NEXT_PUBLIC_PADDLE_CLIENT_TOKEN="live_..." # Or test_...
 NEXT_PUBLIC_PADDLE_ENV="sandbox" # 'sandbox' or 'production'
 PADDLE_API_KEY="pdl_..."
 PADDLE_WEBHOOK_SECRET_KEY="pdl_ntf_set_..." # Found in Paddle Notifications / Webhooks settings
-NEXT_PUBLIC_PADDLE_FEATURED_PRICE_ID="pri_01h..." # $19 flat fee one-time product price ID`,
+NEXT_PUBLIC_PADDLE_FEATURED_PRICE_ID="pri_01h..." # $5 flat fee one-time product price ID (500 cents)`,
   },
 ];

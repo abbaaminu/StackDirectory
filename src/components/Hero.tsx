@@ -6,9 +6,21 @@ import {
   X,
   ShoppingBag,
   LayoutGrid,
+  ArrowUpDown,
+  Clock,
+  Tag,
+  TrendingUp,
 } from "lucide-react";
-import type { PricingFilter } from "../types/directory";
-import { PRICING_FILTER_OPTIONS } from "../types/directory";
+import type {
+  CategoryOption,
+  PricingFilter,
+  SortOption,
+} from "../types/directory";
+import {
+  ALL_CATEGORIES,
+  PRICING_FILTER_OPTIONS,
+  SORT_OPTIONS,
+} from "../types/directory";
 
 export type ViewMode = "all" | "for_sale";
 
@@ -19,6 +31,15 @@ export interface HeroProps {
   onPricingChange: (pricing: PricingFilter) => void;
   selectedTab: ViewMode;
   onTabChange: (tab: ViewMode) => void;
+  selectedSort: SortOption;
+  onSortChange: (sort: SortOption) => void;
+  selectedCategory: string;
+  onCategoryChange: (category: string) => void;
+  /**
+   * Interactive category pills. Pass an entry labelled `ALL_CATEGORIES`
+   * (see types/directory.ts) so users can reset the category filter.
+   */
+  categories: ReadonlyArray<CategoryOption>;
   totalApproved: number;
   forSaleCount: number;
   onOpenSubmit: () => void;
@@ -31,10 +52,20 @@ export const Hero: React.FC<HeroProps> = ({
   onPricingChange,
   selectedTab,
   onTabChange,
+  selectedSort,
+  onSortChange,
+  selectedCategory,
+  onCategoryChange,
+  categories,
   totalApproved,
   forSaleCount,
   onOpenSubmit,
 }) => {
+  // Guarantee an "All Categories" reset pill even before data has loaded.
+  const categoryChoices: ReadonlyArray<CategoryOption> = categories.length
+    ? categories
+    : [{ label: ALL_CATEGORIES, count: totalApproved }];
+
   return (
     <section className="relative bg-white border-b border-slate-200/80 py-10 px-4 overflow-hidden">
       <div className="relative z-10 flex flex-wrap items-center justify-center gap-2 mb-6">
@@ -63,7 +94,7 @@ export const Hero: React.FC<HeroProps> = ({
         <p className="text-sm sm:text-base text-slate-500 mt-2 max-w-2xl mx-auto text-center">
           The hub for next-gen developer utilities, AI apps, and vetted
           micro-SaaS businesses for sale. List for 100% free ($0), boost
-          instantly with Paddle ($19 USD), or buy profitable software with 10%
+          instantly with Paddle ($5 USD), or buy profitable software with 10%
           commission.
         </p>
 
@@ -78,7 +109,7 @@ export const Hero: React.FC<HeroProps> = ({
           <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200 text-amber-700">
             <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
             <span>
-              <strong>$19 Flat</strong> Paddle Instant Featured
+              <strong>$5 Flat</strong> Paddle Instant Featured
             </span>
           </div>
           <div className="flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-200 text-orange-700">
@@ -171,6 +202,89 @@ export const Hero: React.FC<HeroProps> = ({
                   {pricing}
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Third row: Sort order + Category filter pills */}
+        <div className="flex flex-col gap-3 pt-1 lg:flex-row lg:items-center lg:justify-between">
+          {/* Sort options: Most Popular / Recently Added */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              Sort
+            </span>
+            <div
+              role="group"
+              aria-label="Sort tools"
+              className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-1 gap-1 shadow-sm"
+            >
+              {SORT_OPTIONS.map((option) => {
+                const isActive = selectedSort === option;
+                const SortIcon = option === "Most Popular" ? TrendingUp : Clock;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    id={`sort-btn-${option.toLowerCase().replace(/\s+/g, "-")}`}
+                    aria-pressed={isActive}
+                    onClick={() => onSortChange(option)}
+                    className={[
+                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition",
+                      isActive
+                        ? "bg-slate-900 text-white shadow-sm"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
+                    ].join(" ")}
+                  >
+                    <SortIcon className="w-3.5 h-3.5" />
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Category filter pills */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+              <Tag className="w-3.5 h-3.5" />
+              Category
+            </span>
+            <div
+              role="group"
+              aria-label="Filter by category"
+              className="flex flex-wrap gap-1.5"
+            >
+              {categoryChoices.map(({ label, count }) => {
+                const isActive = selectedCategory === label;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    id={`category-btn-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                    aria-pressed={isActive}
+                    onClick={() => onCategoryChange(label)}
+                    className={[
+                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition whitespace-nowrap",
+                      isActive
+                        ? "bg-amber-500 text-slate-950 border-transparent shadow-sm"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100",
+                    ].join(" ")}
+                  >
+                    {label}
+                    <span
+                      className={[
+                        "rounded-md px-1.5 py-0.5 text-[10px] font-bold",
+                        isActive
+                          ? "bg-slate-950/15 text-slate-950"
+                          : "bg-slate-100 text-slate-500",
+                      ].join(" ")}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
