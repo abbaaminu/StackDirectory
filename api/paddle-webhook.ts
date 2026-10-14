@@ -141,16 +141,6 @@ function isDuplicateKeyError(error: { message?: string; code?: string } | null |
 /** `tools.pricing_type` is constrained to these four values in Supabase. */
 const PRICING_TYPES = ["Free", "Freemium", "Paid", "Open Source"] as const;
 
-/** Favicon URL, matching the one SubmitModal derives from the listing URL. */
-function faviconUrl(websiteUrl: string): string | null {
-  try {
-    const host = new URL(websiteUrl).hostname.replace(/^www\./i, "");
-    return host ? `https://www.google.com/s2/favicons?domain=${host}&sz=128` : null;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Complete `public.tools` row for a paid Featured listing that has no database
  * record yet.
@@ -163,6 +153,11 @@ function faviconUrl(websiteUrl: string): string | null {
  *
  * Returns `null` when the payload does not carry enough detail to build a
  * listing (no name or no URL) - fabricating one would be worse than a log line.
+ *
+ * Column list mirrors `buildToolInsertRow` in src/lib/submissions.ts. Never add
+ * `icon_url`: `public.tools` has no such column, so a single unknown column makes
+ * Postgres reject the whole insert (`42703`) and the paying customer would end up
+ * with no listing. The UI derives the icon from `website_url` instead.
  */
 function buildPaidListingRow(
   customData: Record<string, unknown>,
@@ -181,7 +176,6 @@ function buildPaidListingRow(
     tagline,
     description: text(customData.description) || tagline,
     website_url: options.websiteUrl,
-    icon_url: faviconUrl(options.websiteUrl),
     pricing_type: (PRICING_TYPES as readonly string[]).includes(requestedPricing)
       ? requestedPricing
       : "Freemium",

@@ -50,8 +50,92 @@ export const isDuplicateRowError = (
 };
 
 /**
+ * Every column a browser submission may send to `public.tools`.
+ *
+ * This list is the contract with the *deployed* Supabase table, verified against
+ * `/rest/v1/tools`: the live schema also carries `mrr`, `user_id` and
+ * `click_count`, but a submission never sets them.
+ *
+ * It deliberately has **no `icon_url`**. The live table has never had that
+ * column, so sending it made PostgREST reject the entire insert with
+ * `42703 column tools.icon_url does not exist` — and because the caller treated
+ * every insert error as "fall back to a browser-only save", the rejection looked
+ * like a successful submission while the review queue stayed empty. Icons are
+ * derived from `website_url` in the UI instead (ToolCard / ToolDetailModal fall
+ * back to unavatar.io / icon.horse), so nothing is lost.
+ *
+ * `scripts/verify.tsx` asserts `buildToolInsertRow` never grows a key outside
+ * this list, so future column drift fails loudly instead of silently.
+ */
+export const TOOL_INSERT_COLUMNS = [
+  "id",
+  "name",
+  "tagline",
+  "description",
+  "website_url",
+  "pricing_type",
+  "category",
+  "upvotes",
+  "status",
+  "is_approved",
+  "is_featured",
+  "paddle_customer_id",
+  "is_for_sale",
+  "asking_price",
+  "monthly_revenue",
+  "monthly_profit",
+  "seller_contact",
+  "tech_stack",
+] as const;
+
+/**
+ * True when a write was rejected because it referenced a column the live table
+ * does not have.
+ *
+ * `42703` is Postgres' "undefined column"; `PGRST204` is PostgREST's schema-cache
+ * variant ("Could not find the 'x' column ... in the schema cache"). Both mean
+ * the deployed schema and the code have drifted apart — exactly the class of bug
+ * that silently emptied the review queue, so the caller can explain it instead
+ * of guessing.
+ */
+export const isUnknownColumnError = (
+  error: { code?: string; message?: string } | null | undefined,
+): boolean => {
+  if (!error) return false;
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /does not exist|could not find the .* column|schema cache/i.test(error.message ?? "")
+  );
+};
+
+/**
+ * Visitor-facing reason for a rejected submission, shared by the toast and the
+ * inline error in SubmitModal so the two can never disagree.
+ *
+ * Kept pure (no Supabase/React imports) so the suite can pin the wording: a
+ * rejected insert must never read like something that made it into the queue.
+ */
+export const submissionRejectionReason = (
+  error: { code?: string; message?: string } | null | undefined,
+): string => {
+  const message = error?.message?.trim() || "Supabase rejected the submission.";
+  return isUnknownColumnError(error)
+    ? `The submitted columns do not match the deployed Supabase schema (${message})`
+    : message;
+};
+
+/**
  * `public.tools` row for a new submission: explicit id (see `createToolId`),
  * moderation defaults, and the marketplace columns the schema requires.
+ *
+ * `is_approved` / `is_featured` stay false (see `pendingToolDefaults`) so the row
+ * satisfies the "Anyone can submit a tool" RLS policy —
+ * `WITH CHECK (is_approved = FALSE AND is_featured = FALSE)` — and lands in the
+ * moderation queue instead of the public directory.
+ *
+ * Only columns from `TOOL_INSERT_COLUMNS` may appear here: one unknown column
+ * fails the whole insert.
  */
 export const buildToolInsertRow = (tool: Tool) => ({
   id: tool.id,
@@ -59,7 +143,6 @@ export const buildToolInsertRow = (tool: Tool) => ({
   tagline: tool.tagline,
   description: tool.description,
   website_url: tool.website_url,
-  icon_url: tool.icon_url ?? null,
   pricing_type: tool.pricing_type,
   category: tool.category,
   upvotes: tool.upvotes ?? 0,

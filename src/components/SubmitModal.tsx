@@ -393,7 +393,14 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         submitted = true;
       } catch (error) {
         console.error("Direct submission failed:", error);
-        setErrorMsg("We could not submit your app for review. Please try again.");
+        // App rethrows with the server's own reason (see handleSubmitTool), so
+        // show it: a submission that never reached the queue must not look like
+        // a generic hiccup the visitor can just retry blind.
+        const reason =
+          error instanceof Error && error.message.trim()
+            ? ` ${error.message.trim()}`
+            : "";
+        setErrorMsg(`We could not submit your app for review.${reason}`);
       } finally {
         setIsSubmitting(false);
       }

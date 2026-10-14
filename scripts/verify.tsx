@@ -58,7 +58,14 @@ import {
   readPaddleEventName,
 } from "../src/lib/paddleCheckout";
 import { sanitizeDealMessage } from "../src/lib/redact";
-import { buildToolInsertRow, createToolId, isDuplicateRowError } from "../src/lib/submissions";
+import {
+  buildToolInsertRow,
+  createToolId,
+  isDuplicateRowError,
+  isUnknownColumnError,
+  submissionRejectionReason,
+  TOOL_INSERT_COLUMNS,
+} from "../src/lib/submissions";
 import { getHostname, getPricingBadgeColor } from "../src/lib/toolDisplay";
 import { buildCategoryOptions, matchesToolFilters, sortTools } from "../src/lib/toolFilters";
 import { getToolSlug } from "../src/lib/toolSlug";
@@ -224,6 +231,36 @@ check("marketplace columns survive the insert mapping",
 check("optional numeric columns default to 0 / empty",
   buildToolInsertRow({ ...pendingTool, monthly_revenue: undefined }).monthly_revenue === 0 &&
   buildToolInsertRow({ ...pendingTool, tech_stack: undefined }).tech_stack.length === 0);
+
+// Regression: the deployed `public.tools` table has no `icon_url` column, so
+// sending one made PostgREST reject the entire insert with `42703` — and the
+// caller used to swallow that error into a "saved locally" success while the
+// review queue stayed empty.
+const insertColumns = Object.keys(insertRow);
+const isSchemaColumn = (column: string): boolean =>
+  (TOOL_INSERT_COLUMNS as readonly string[]).includes(column);
+check("the insert row only sends columns the live table has",
+  insertColumns.every(isSchemaColumn),
+  insertColumns.filter((column) => !isSchemaColumn(column)).join(", "));
+check("the insert row drops icon_url (public.tools has no such column)",
+  !insertColumns.includes("icon_url") && insertColumns.includes("website_url"));
+check("the insert row always carries the columns the schema requires",
+  ["id", "name", "tagline", "description", "website_url", "pricing_type", "category",
+    "upvotes", "status", "is_approved", "is_featured", "seller_contact", "tech_stack"]
+    .every((column) => insertColumns.includes(column)),
+  insertColumns.join(", "));
+check("an unknown column is recognised however Postgres/PostgREST reports it",
+  isUnknownColumnError({ code: "42703", message: "column tools.icon_url does not exist" }) &&
+  isUnknownColumnError({ code: "PGRST204", message: "Could not find the 'icon_url' column of 'tools' in the schema cache" }) &&
+  !isUnknownColumnError({ code: "23505", message: "duplicate key value violates unique constraint" }) &&
+  !isUnknownColumnError(null));
+check("a schema drift rejection explains itself to the visitor",
+  submissionRejectionReason({ code: "42703", message: "column tools.icon_url does not exist" })
+    .includes("The submitted columns do not match the deployed Supabase schema"));
+check("any other rejection surfaces the server's own message",
+  submissionRejectionReason({ code: "42501", message: "new row violates row-level security policy" })
+    === "new row violates row-level security policy" &&
+  submissionRejectionReason(null) === "Supabase rejected the submission.");
 
 section("Admin allow-list");
 
@@ -1124,6 +1161,11 @@ check("the created listing reuses the signed custom_data",
   JSON.stringify(insertedRow));
 check("the buyer's Paddle customer id is recorded on the row",
   insertedRow.paddle_customer_id === "ctm_1");
+check("a listing created by the webhook omits columns the live table lacks",
+  !Object.keys(insertedRow).includes("icon_url") &&
+  Object.keys(insertedRow).every((column) =>
+    (TOOL_INSERT_COLUMNS as readonly string[]).includes(column)),
+  Object.keys(insertedRow).join(", "));
 check("the response reports that the listing had to be created",
   orphanResult.body?.created === true);
 check("a listing created from custom_data still triggers the buyer receipt",

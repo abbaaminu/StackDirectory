@@ -16,7 +16,11 @@ import {
   isAdminApiUnavailable,
 } from "./lib/adminTools";
 import { getToolSlug } from "./lib/toolSlug";
-import { buildToolInsertRow, isDuplicateRowError } from "./lib/submissions";
+import {
+  buildToolInsertRow,
+  isDuplicateRowError,
+  submissionRejectionReason,
+} from "./lib/submissions";
 import {
   readJsonArray,
   readStringArray,
@@ -275,7 +279,12 @@ export default function App() {
     // (see lib/submissions.ts).
     const row = buildToolInsertRow(newTool);
 
-    const saveSubmissionLocally = async () => {
+    /**
+     * Keeps a rejected submission in this browser so the visitor's typing is not
+     * lost. `notice` must carry the real outcome: a local save is **not** a
+     * submission, so the visitor may never be told the app is queued for review.
+     */
+    const saveSubmissionLocally = async (notice: string) => {
       try {
         const queued = readJsonArray<Tool>(STORAGE_KEYS.tools);
         const persisted = writeJsonArray(STORAGE_KEYS.tools, [
@@ -283,7 +292,7 @@ export default function App() {
           { ...newTool, ...pendingToolDefaults },
         ]);
         if (!persisted) throw new Error("Local storage is unavailable.");
-        showToast(`📋 "${newTool.name}" saved locally for review.`);
+        showToast(notice);
         await fetchApprovedTools();
       } catch {
         showToast(`❌ Could not save "${newTool.name}" in this browser.`);
@@ -296,7 +305,7 @@ export default function App() {
           "Supabase is not configured, so the paid Featured listing could not be saved.",
         );
       }
-      await saveSubmissionLocally();
+      await saveSubmissionLocally(`📋 "${newTool.name}" saved locally for review.`);
       return;
     }
 
@@ -315,8 +324,20 @@ export default function App() {
       if (isPaddleCheckout) {
         throw new Error(error.message);
       }
-      await saveSubmissionLocally();
-      return;
+
+      // Supabase refused the row. This used to be swallowed into a
+      // "saved locally for review" toast while SubmitModal showed the green
+      // "submitted successfully" banner — so a rejected submission looked
+      // queued and the review queue silently stayed empty (a single unknown
+      // column, e.g. the `icon_url` that `public.tools` does not have, fails the
+      // whole insert). Keep the visitor's data in this browser, state the real
+      // reason from the server, and rethrow so the modal shows an inline error
+      // and no false success instead of closing as if it worked.
+      const reason = submissionRejectionReason(error);
+      await saveSubmissionLocally(
+        `❌ Supabase rejected "${newTool.name}": ${reason}. Saved in this browser only — it is NOT in the review queue.`,
+      );
+      throw new Error(reason);
     }
 
     showToast(
