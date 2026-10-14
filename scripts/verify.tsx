@@ -7,8 +7,9 @@
  *
  *   1. pure logic   - filters, sorting, redaction, slugs, storage, submissions
  *   2. rendering    - every component App mounts (react-dom/server)
- *   3. api handlers - api/send-email.ts and api/paddle-webhook.ts end to end,
- *                     with Supabase/Resend network calls stubbed out
+ *   3. api handlers - api/admin-tools.ts, api/send-email.ts and
+ *                     api/paddle-webhook.ts end to end, with network calls
+ *                     stubbed out
  *
  * No test framework is required: the assertions are plain functions and the
  * suite exits non-zero when anything fails, so it can be wired into CI.
@@ -919,13 +920,30 @@ const adminEnv = {
 const adminUser = { id: "u1", email: "admin@example.com", app_metadata: {} };
 const deleteRowId = createToolId();
 
-const createAdminStub = (options: { rows?: unknown[]; user?: unknown | null } = {}) => {
+const createAdminStub = (options: {
+  rows?: unknown[];
+  user?: unknown | null;
+  emailFailure?: boolean;
+} = {}) => {
   const rows = options.rows ?? [{}];
   const user = options.user === undefined ? adminUser : options.user;
   const calls: ApiCall[] = [];
-  const stub = (input: unknown, init?: { method?: string; body?: unknown; headers?: unknown }) => {
+  const stub = async (input: unknown, init?: { method?: string; body?: unknown; headers?: unknown }) => {
     const url = typeof input === "string" ? input : String((input as { url?: string })?.url ?? "");
-    calls.push(toApiCall(input, init));
+    const call = toApiCall(input, init);
+    if (url.includes("api.resend.com/emails")) {
+      const requestLike = input as { text?: () => Promise<string> } | undefined;
+      if (!call.body && typeof requestLike?.text === "function") {
+        call.body = await requestLike.text();
+      }
+      calls.push(call);
+      return jsonResponse(
+        options.emailFailure ? { message: "Resend unavailable" } : { id: "approval_email_1" },
+        !options.emailFailure,
+        options.emailFailure ? 503 : 200,
+      );
+    }
+    calls.push(call);
     if (url.includes("/auth/v1/user")) {
       return user ? jsonResponse(user) : jsonResponse({ message: "invalid token" }, false, 401);
     }
@@ -1011,6 +1029,43 @@ check("approve keeps status and is_approved in agreement",
   approveBody.status === "approved" &&
   approveBody.is_approved === true,
   JSON.stringify(approveBody));
+
+const approvalEmailBackend = createAdminStub({
+  rows: [{ id: deleteRowId, name: "Approved <Tool>", seller_contact: "submitter@example.com" }],
+});
+const approvalEmailResult = await invokeAdmin(approvalEmailBackend.stub, {
+  action: "approve",
+  env: {
+    RESEND_API_KEY: "re_test",
+    RESEND_FROM_EMAIL: "StackDirectory <noreply@example.com>",
+  },
+});
+const approvalEmailCall = approvalEmailBackend.calls.find((call) => call.url.includes("api.resend.com/emails"));
+const approvalEmail = JSON.parse(approvalEmailCall?.body ?? "{}") as Record<string, unknown>;
+check("approval sends a Resend notification using the stored submitter contact",
+  approvalEmailResult.status === 200 &&
+  approvalEmailCall?.method === "POST" &&
+  approvalEmail.to === "submitter@example.com" &&
+  approvalEmail.from === "StackDirectory <noreply@example.com>",
+  JSON.stringify(approvalEmail));
+check("approval email includes an escaped tool name and direct listing link",
+  String(approvalEmail.html ?? "").includes("Approved &lt;Tool&gt;") &&
+  String(approvalEmail.html ?? "").includes("https://apps.stackbuildco.com/?tool=approved-tool"),
+  String(approvalEmail.html ?? ""));
+
+const failedApprovalEmailBackend = createAdminStub({
+  rows: [{ id: deleteRowId, name: "Approved Tool", seller_contact: "submitter@example.com" }],
+  emailFailure: true,
+});
+const failedApprovalEmailResult = await invokeAdmin(failedApprovalEmailBackend.stub, {
+  action: "approve",
+  env: { RESEND_API_KEY: "re_test" },
+});
+check("Resend delivery failure does not fail the successful database approval",
+  failedApprovalEmailResult.status === 200 &&
+  failedApprovalEmailResult.body?.success === true &&
+  failedApprovalEmailBackend.calls.some((call) => call.url.includes("api.resend.com/emails")),
+  JSON.stringify(failedApprovalEmailResult.body));
 
 const roleAdminResult = await invokeAdmin(
   createAdminStub({ user: { id: "u3", email: "someone@else.dev", app_metadata: { role: "admin" } } }).stub,
@@ -1155,8 +1210,6 @@ if (failures.length > 0) {
 }
 
 console.log("All checks passed.");
-
-
 
 
 

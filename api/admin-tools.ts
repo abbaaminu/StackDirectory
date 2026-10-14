@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { Resend } from "resend";
 import type { IncomingMessage, ServerResponse } from "http";
 
 /**
@@ -150,6 +151,52 @@ function countRows(data: unknown): number {
   return data ? 1 : 0;
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>'"]/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': "&quot;",
+  })[character] ?? character);
+}
+
+async function sendApprovalNotification(tool: {
+  id: string;
+  name: string;
+  seller_contact?: unknown;
+}): Promise<void> {
+  const submitterEmail =
+    typeof tool.seller_contact === "string" ? tool.seller_contact.trim() : "";
+  if (!submitterEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(submitterEmail)) return;
+
+  try {
+    const apiKey = process.env.RESEND_API_KEY?.trim();
+    if (!apiKey) throw new Error("RESEND_API_KEY is not configured.");
+
+    const toolSlug =
+      tool.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") ||
+      tool.id;
+    const listingUrl = `https://apps.stackbuildco.com/?tool=${encodeURIComponent(toolSlug)}`;
+    const resend = new Resend(apiKey);
+    const { error } = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL?.trim() ||
+        "StackDirectory <onboarding@resend.dev>",
+      to: submitterEmail,
+      subject: `${tool.name} is now live on StackDirectory`,
+      html:
+        `<h2>Your app has been approved!</h2>` +
+        `<p>Congratulations, <strong>${escapeHtml(tool.name)}</strong> is now live on StackDirectory.</p>` +
+        `<p><a href="${listingUrl}">View your live listing</a></p>`,
+    });
+    if (error) {
+      console.error("[Admin Tools] Approval email delivery failed:", error);
+    }
+  } catch (emailError) {
+    console.error("[Admin Tools] Approval email delivery failed:", emailError);
+  }
+}
+
 export default async function handler(req: AdminRequest, res: ServerResponse) {
   if (req.method !== "POST") {
     respond(res, 405, { success: false, error: "Method not allowed" });
@@ -271,7 +318,7 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
       .from("tools")
       .update(changes as never)
       .eq("id", toolId)
-      .select(COLUMNS);
+      .select(action === "approve" ? `${COLUMNS}, seller_contact` : COLUMNS);
 
     if (error) {
       console.error(`[Admin Tools] ${action} failed:`, error.message);
@@ -286,6 +333,21 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
         error: "No listing matched that id, so nothing was changed.",
       });
       return;
+    }
+
+    if (action === "approve" && Array.isArray(updatedRows)) {
+      const approvedTool = updatedRows[0] as {
+        id?: unknown;
+        name?: unknown;
+        seller_contact?: unknown;
+      };
+      if (typeof approvedTool.name === "string" && typeof approvedTool.id === "string") {
+        await sendApprovalNotification({
+          id: approvedTool.id,
+          name: approvedTool.name,
+          seller_contact: approvedTool.seller_contact,
+        });
+      }
     }
 
     respond(res, 200, { success: true, action, toolId, affected });

@@ -193,8 +193,7 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
     if (token) {
       const result = await callAdminToolAction(action, toolId, token);
       if (result.ok) {
-        const target = applyLocalChanges(toolId, changes);
-        if (action === "approve") notifySubmitter(target);
+        applyLocalChanges(toolId, changes);
         finish(`Listing ${action === "approve" ? "approved" : "rejected"} in Supabase.`);
         return;
       }
