@@ -67,18 +67,31 @@ export const getSafeHostname = (url?: string | null): string | null => {
 };
 
 /**
- * Google favicon service URL for a listing, or `null` when the URL has no
- * usable domain.
+ * First-party icon endpoint (api/favicon.ts).
  *
- * Centralised so the card, the detail modal and the submit form always request
- * the same icon: the previous inline copies drifted (some encoded the hostname,
- * some did not) and a `null` return lets a caller render an initials avatar
- * instead of a broken image.
+ * Every listing icon is fetched from *our own* origin rather than from a
+ * third-party favicon service. The service we used before
+ * (`https://www.google.com/s2/favicons?domain=...`) answers 404 for any site it
+ * has not indexed - which is every listing on a fresh subdomain - so the cards
+ * showed an empty circle and the console filled with
+ * `t2.gstatic.com/faviconV2 ... 404`. `/api/favicon` resolves the site's own
+ * icon server-side and always answers with a 200 image, so it replaces both the
+ * old favicon *and* the old hard-coded fallback asset.
+ */
+export const FAVICON_ENDPOINT = "/api/favicon";
+
+/**
+ * Icon URL for a listing, or `null` when the URL has no usable domain.
+ *
+ * Same-origin on purpose: it keeps the browser free of third-party requests,
+ * lets the endpoint apply its own caching policy, and means a listing on a
+ * brand-new domain still gets an icon (the endpoint generates one) instead of a
+ * broken image. A `null` return lets a caller render an initials avatar.
  */
 export const getFaviconUrl = (url?: string | null, size = 128): string | null => {
   const hostname = getSafeHostname(url);
   if (!hostname) return null;
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=${size}`;
+  return `${FAVICON_ENDPOINT}?domain=${encodeURIComponent(hostname)}&size=${encodeURIComponent(String(size))}`;
 };
 
 /**
@@ -88,19 +101,9 @@ export const getFaviconUrl = (url?: string | null, size = 128): string | null =>
  * broken image can never loop the `onError` handler back to the top of the
  * chain.
  */
-export const TOOL_IMAGE_SOURCES = ["custom", "favicon", "fallback", "initial"] as const;
+export const TOOL_IMAGE_SOURCES = ["custom", "favicon", "initial"] as const;
 
 export type ToolImageSource = (typeof TOOL_IMAGE_SOURCES)[number];
-
-/**
- * Hard-coded last-resort `src` for `<img onError>`.
- *
- * Needed because the favicon service answers a *missing* icon with a generic
- * globe (so `onError` never fires) while a dead host, a blocked request or a
- * broken `icon_url` leaves a visibly broken image behind. This is a third-party
- * asset we do not control - swap this one constant to self-host a branded icon.
- */
-export const FALLBACK_TOOL_IMAGE_URL = "https://abs.twimg.com/favicons/twitter.3.ico";
 
 /** First logo source to try for a listing. */
 export const initialToolImageSource = (
@@ -108,13 +111,18 @@ export const initialToolImageSource = (
   hasFavicon: boolean,
 ): ToolImageSource => (hasCustomIcon ? "custom" : hasFavicon ? "favicon" : "initial");
 
-/** Source to try after `source` failed to load. `initial` always terminates. */
+/**
+ * Source to try after `source` failed to load. `initial` always terminates.
+ *
+ * There is deliberately no third-party "last resort" image any more: the old
+ * chain ended on a hard-coded Twitter favicon, which is both off-brand and one
+ * more host that can be unreachable. `/api/favicon` already degrades to a
+ * generated avatar, and the inline avatar below needs no network at all.
+ */
 export const nextToolImageSource = (source: ToolImageSource): ToolImageSource => {
   switch (source) {
     case "custom":
       return "favicon";
-    case "favicon":
-      return "fallback";
     default:
       return "initial";
   }
@@ -133,11 +141,9 @@ export const resolveToolImageSrc = (
 ): string | null => {
   switch (source) {
     case "custom":
-      return customIconUrl || faviconUrl || FALLBACK_TOOL_IMAGE_URL;
+      return customIconUrl || faviconUrl || null;
     case "favicon":
-      return faviconUrl || FALLBACK_TOOL_IMAGE_URL;
-    case "fallback":
-      return FALLBACK_TOOL_IMAGE_URL;
+      return faviconUrl || null;
     default:
       return null;
   }

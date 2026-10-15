@@ -69,6 +69,7 @@ import {
   TOOL_INSERT_COLUMNS,
 } from "../src/lib/submissions";
 import {
+  FAVICON_ENDPOINT,
   getFaviconUrl,
   getHostname,
   getPricingBadgeColor,
@@ -77,7 +78,6 @@ import {
   initialToolImageSource,
   nextToolImageSource,
   resolveToolImageSrc,
-  FALLBACK_TOOL_IMAGE_URL,
   TOOL_IMAGE_SOURCES,
 } from "../src/lib/toolDisplay";
 import { buildCategoryOptions, matchesToolFilters, sortTools } from "../src/lib/toolFilters";
@@ -93,6 +93,22 @@ import {
 } from "../api/_lib/email";
 import { clientIpFromRequest, consumeRateLimit, resetRateLimits } from "../api/_lib/rateLimit";
 import { OG_TEXT_LIMITS, ogText } from "../api/_lib/ogText";
+import { isPublicAddress, resolvePublicUrl, setHostResolver } from "../api/_lib/publicUrl";
+import type { HostResolver } from "../api/_lib/publicUrl";
+import {
+  avatarSvg,
+  DEFAULT_ICON_SIZE,
+  escapeXml,
+  extractIconHref,
+  iconLabel,
+  isImageContentType,
+  MAX_ICON_SIZE,
+  MIN_ICON_SIZE,
+  normalizeContentType,
+  normalizeIconDomain,
+  pickIconSize,
+} from "../api/_lib/toolIcon";
+import faviconHandler from "../api/favicon";
 import { buildLocalAcquisitionOffer } from "../src/lib/acquisition";
 import { authorizationHeader, getAccessToken } from "../src/lib/session";
 import { applyToolOgMetadata, buildToolOgMetadata } from "../src/lib/toolOgMetadata";
@@ -252,12 +268,21 @@ check("hostnames are only exposed for safe URLs",
   getSafeHostname("www.warp.dev/pricing") === "www.warp.dev" &&
   getSafeHostname("javascript:alert(1)") === null &&
   getSafeHostname("") === null);
-check("favicon URLs are only built for safe domains",
+// Every icon is fetched from our own origin. The third-party favicon service the
+// cards used before (`google.com/s2/favicons`) answers 404 for any site it has
+// not indexed - which is every listing on a fresh subdomain - and that is what
+// left the cards rendering an empty grey circle.
+check("favicon URLs are only built for safe domains and point at our own endpoint",
   getFaviconUrl("https://www.warp.dev/pricing") ===
-    "https://www.google.com/s2/favicons?domain=www.warp.dev&sz=128" &&
-  getFaviconUrl("warp.dev", 64) === "https://www.google.com/s2/favicons?domain=warp.dev&sz=64" &&
+    `${FAVICON_ENDPOINT}?domain=www.warp.dev&size=128` &&
+  getFaviconUrl("warp.dev", 64) === `${FAVICON_ENDPOINT}?domain=warp.dev&size=64` &&
   getFaviconUrl("javascript:alert(1)") === null &&
   getFaviconUrl("") === null);
+check("an icon URL is same-origin, so a card makes no third-party request",
+  FAVICON_ENDPOINT.startsWith("/") &&
+  FAVICON_ENDPOINT.endsWith("/favicon") &&
+  getFaviconUrl("https://warp.dev") === `${FAVICON_ENDPOINT}?domain=warp.dev&size=128` &&
+  !getFaviconUrl("https://warp.dev")?.includes("google"));
 check("pricing badges cover every tier plus a default",
   getPricingBadgeColor("Free") !== getPricingBadgeColor("Paid") &&
   getPricingBadgeColor("Free").includes("emerald") &&
@@ -489,14 +514,14 @@ const bareHostTool: Tool = {
   icon_url: undefined,
 };
 const bareHostHtml = render(<ToolCard tool={bareHostTool} onToggleUpvote={noop} />);
-check("a bare host still renders a working link and favicon",
+check("a bare host still renders a working link and a first-party icon",
   bareHostHtml.includes('href="https://warp.dev/pricing"') &&
-  bareHostHtml.includes("https://www.google.com/s2/favicons?domain=warp.dev"),
+  bareHostHtml.includes(`${FAVICON_ENDPOINT}?domain=warp.dev`),
   bareHostHtml.slice(0, 400));
 
-// The logo chain is the only thing standing between a dead `icon_url`/favicon and
-// a visibly broken image, so it is asserted on its own rather than through the
-// components: custom -> favicon -> hard-coded fallback -> letter avatar, exactly
+// The logo chain is the only thing standing between a dead `icon_url` / a failing
+// icon request and a visibly broken image, so it is asserted on its own rather
+// than through the components: custom -> /api/favicon -> letter avatar, exactly
 // one step per `onError`, ending on the terminal avatar state that cannot loop.
 const chainIsMonotonic = TOOL_IMAGE_SOURCES.every(
   (source, index) =>
@@ -509,28 +534,30 @@ check("the logo chain advances in declaration order and terminates on the avatar
   initialToolImageSource(false, true) === "favicon" &&
   initialToolImageSource(false, false) === "initial" &&
   nextToolImageSource("custom") === "favicon" &&
-  nextToolImageSource("favicon") === "fallback" &&
-  // A dead hard-coded fallback must not restart the chain at "custom".
-  nextToolImageSource("fallback") === "initial" &&
+  nextToolImageSource("favicon") === "initial" &&
   nextToolImageSource("initial") === "initial" &&
-  nextToolImageSource(nextToolImageSource(nextToolImageSource(nextToolImageSource("custom")))) === "initial");
+  nextToolImageSource(nextToolImageSource(nextToolImageSource("custom"))) === "initial");
 
 const customIconUrl = "https://cdn.example.com/mark.png";
-const faviconServiceUrl = "https://www.google.com/s2/favicons?domain=warp.dev&sz=128";
-check("a custom icon wins, the favicon is the runner-up and a missing value degrades forward",
-  resolveToolImageSrc("custom", customIconUrl, faviconServiceUrl) === customIconUrl &&
-  resolveToolImageSrc("custom", null, faviconServiceUrl) === faviconServiceUrl &&
-  resolveToolImageSrc("favicon", customIconUrl, faviconServiceUrl) === faviconServiceUrl &&
-  resolveToolImageSrc("favicon", customIconUrl, null) === FALLBACK_TOOL_IMAGE_URL &&
-  resolveToolImageSrc("fallback", customIconUrl, faviconServiceUrl) === FALLBACK_TOOL_IMAGE_URL &&
+const faviconEndpointUrl = `${FAVICON_ENDPOINT}?domain=warp.dev&size=128`;
+check("a custom icon wins, the endpoint is the runner-up and a missing value degrades forward",
+  resolveToolImageSrc("custom", customIconUrl, faviconEndpointUrl) === customIconUrl &&
+  resolveToolImageSrc("custom", null, faviconEndpointUrl) === faviconEndpointUrl &&
+  resolveToolImageSrc("favicon", customIconUrl, faviconEndpointUrl) === faviconEndpointUrl &&
+  // A row with neither a stored icon nor a usable domain cannot render an `src`.
+  resolveToolImageSrc("favicon", customIconUrl, null) === null &&
   // The avatar is inline SVG, so the chain deliberately yields no `src` at all -
   // which is what stops React rendering `src="undefined"`.
-  resolveToolImageSrc("initial", customIconUrl, faviconServiceUrl) === null,
-  String(resolveToolImageSrc("initial", customIconUrl, faviconServiceUrl)));
-check("the hard-coded fallback is an absolute, non-empty https asset",
-  FALLBACK_TOOL_IMAGE_URL.startsWith("https://") &&
-  FALLBACK_TOOL_IMAGE_URL.length > "https://".length &&
-  !FALLBACK_TOOL_IMAGE_URL.includes("undefined"));
+  resolveToolImageSrc("initial", customIconUrl, faviconEndpointUrl) === null,
+  String(resolveToolImageSrc("initial", customIconUrl, faviconEndpointUrl)));
+// The chain used to end on a hard-coded *third-party* image; now its last resort
+// is inline SVG, so no listing icon can depend on a host we do not control.
+check("the chain's last resort needs no network and no third party",
+  TOOL_IMAGE_SOURCES.length === 3 &&
+  nextToolImageSource("favicon") === "initial" &&
+  resolveToolImageSrc("initial") === null &&
+  FAVICON_ENDPOINT === "/api/favicon" &&
+  faviconEndpointUrl.startsWith(FAVICON_ENDPOINT));
 
 const heroHtml = render(
   <Hero
@@ -2037,6 +2064,483 @@ check("an unidentifiable client is not throttled at all",
 check("a signed-out browser holds no access token", (await getAccessToken()) === null);
 check("a signed-out browser sends no Authorization header",
   Object.keys(await authorizationHeader()).length === 0);
+
+/* --------------------------- hardening: the first-party icon endpoint chain */
+
+section("api/_lib/publicUrl.ts - the shared SSRF guard");
+
+// Both `/api/favicon` and `/api/website-metadata` turn a visitor's input into an
+// outbound request from inside the deployment's network, so the "is this host a
+// public website?" answer lives in exactly one module. DNS is injected here, so
+// the suite never depends on the network being reachable.
+check("addresses that are not publicly routable are refused",
+  isPublicAddress("93.184.216.34") &&
+  isPublicAddress("2606:4700:4700::1111") &&
+  !isPublicAddress("127.0.0.1") &&
+  !isPublicAddress("0.0.0.0") &&
+  !isPublicAddress("10.1.2.3") &&
+  !isPublicAddress("172.16.0.1") &&
+  !isPublicAddress("192.168.1.1") &&
+  !isPublicAddress("169.254.169.254") &&
+  !isPublicAddress("100.64.0.1") &&
+  !isPublicAddress("224.0.0.1") &&
+  !isPublicAddress("::") &&
+  !isPublicAddress("::1") &&
+  !isPublicAddress("fd00::1") &&
+  !isPublicAddress("fe80::1") &&
+  !isPublicAddress("::ffff:127.0.0.1") &&
+  !isPublicAddress("not-an-ip"));
+
+const publicLookup: HostResolver = async () => [{ address: "93.184.216.34" }];
+const privateLookup: HostResolver = async () => [{ address: "10.0.0.7" }];
+const mixedLookup: HostResolver = async () => [
+  { address: "93.184.216.34" },
+  { address: "192.168.0.9" },
+];
+const deadLookup: HostResolver = async () => [];
+
+/** Message `resolvePublicUrl` rejected `value` with, or "" when it accepted it. */
+const rejectionReason = async (value: string, resolver: HostResolver = publicLookup) => {
+  setHostResolver(resolver);
+  try {
+    await resolvePublicUrl(value);
+    return "";
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+};
+
+check("only credential-free http(s) URLs are inspected",
+  (await rejectionReason("file:///etc/passwd")).includes("public HTTP") &&
+  (await rejectionReason("ftp://warp.dev/mark.png")).includes("public HTTP") &&
+  (await rejectionReason("https://user:pass@warp.dev/mark.png")).includes("credentials") &&
+  (await rejectionReason("warp.dev is not a url")).length > 0);
+check("bare, local and internal hostnames are refused before any request",
+  (await rejectionReason("http://localhost/mark.png")).includes("publicly accessible") &&
+  (await rejectionReason("http://warp/mark.png")).includes("publicly accessible") &&
+  (await rejectionReason("http://build.local/mark.png")).includes("publicly accessible") &&
+  (await rejectionReason("http://api.localhost/mark.png")).includes("publicly accessible"));
+check("a host that resolves anywhere non-public is refused, even when the URL looks public",
+  (await rejectionReason("https://internal.example.com/mark.png", privateLookup)).includes("public IP") &&
+  (await rejectionReason("https://mixed.example.com/mark.png", mixedLookup)).includes("public IP") &&
+  (await rejectionReason("https://dead.example.com/mark.png", deadLookup)).includes("public IP") &&
+  (await rejectionReason("http://127.0.0.1/mark.png")).includes("public IP") &&
+  (await rejectionReason("http://169.254.169.254/latest/meta-data/")).includes("public IP"));
+check("a resolvable public host is accepted",
+  (await resolvePublicUrl("https://warp.dev/mark.svg")).href === "https://warp.dev/mark.svg" &&
+  // A trailing dot is a valid fully-qualified name, so it is accepted (and left
+  // alone: only the check strips it).
+  (await resolvePublicUrl("HTTPS://Warp.dev./mark.svg")).hostname === "warp.dev.");
+setHostResolver(null);
+
+section("api/_lib/toolIcon.ts - which domain, which icon, which avatar");
+
+check("the `?domain=` value must be a bare public host, not a URL",
+  normalizeIconDomain("WARP.dev.") === "warp.dev" &&
+  normalizeIconDomain("  scribeswift.stackbuildco.com  ") === "scribeswift.stackbuildco.com" &&
+  normalizeIconDomain("https://warp.dev/favicon.ico") === null &&
+  normalizeIconDomain("warp.dev/logo.png") === null &&
+  normalizeIconDomain("warp.dev:8443") === null &&
+  normalizeIconDomain("user@warp.dev") === null &&
+  normalizeIconDomain("warp%2edev") === null);
+check("localhost, local suffixes and IP literals never reach the network",
+  normalizeIconDomain("localhost") === null &&
+  normalizeIconDomain("app.localhost") === null &&
+  normalizeIconDomain("build.local") === null &&
+  normalizeIconDomain("vault.internal") === null &&
+  normalizeIconDomain("printer.home.arpa") === null &&
+  normalizeIconDomain("127.0.0.1") === null &&
+  normalizeIconDomain("169.254.169.254") === null &&
+  normalizeIconDomain("::1") === null);
+check("a malformed host is rejected rather than fetched",
+  normalizeIconDomain("") === null &&
+  normalizeIconDomain("   ") === null &&
+  normalizeIconDomain("warp") === null &&
+  normalizeIconDomain(".warp.dev") === null &&
+  normalizeIconDomain("warp..dev") === null &&
+  normalizeIconDomain("-warp.dev") === null &&
+  normalizeIconDomain("warp-.dev") === null &&
+  normalizeIconDomain(`${"w".repeat(254)}.dev`) === null &&
+  normalizeIconDomain(null) === null &&
+  normalizeIconDomain(42) === null);
+
+check("the requested icon size is clamped into range, never NaN",
+  pickIconSize("128") === 128 &&
+  pickIconSize(64) === 64 &&
+  pickIconSize(" 256 ") === 256 &&
+  pickIconSize("64.7") === 64 &&
+  pickIconSize("9999") === MAX_ICON_SIZE &&
+  pickIconSize("4") === MIN_ICON_SIZE &&
+  pickIconSize("abc") === DEFAULT_ICON_SIZE &&
+  pickIconSize("") === DEFAULT_ICON_SIZE &&
+  pickIconSize(null) === DEFAULT_ICON_SIZE &&
+  pickIconSize(undefined) === DEFAULT_ICON_SIZE);
+
+check("only a real image message type is forwarded",
+  isImageContentType("image/png") &&
+  isImageContentType("IMAGE/PNG") &&
+  isImageContentType("image/svg+xml") &&
+  isImageContentType("image/x-icon") &&
+  isImageContentType("image/vnd.microsoft.icon; charset=binary") &&
+  // Vercel's SPA rewrite answers `/favicon.ico` with `200 text/html`, so the
+  // status alone would forward an HTML document as an icon.
+  !isImageContentType("text/html; charset=utf-8") &&
+  !isImageContentType("application/octet-stream") &&
+  !isImageContentType("text/plain") &&
+  !isImageContentType("") &&
+  !isImageContentType(null) &&
+  !isImageContentType(undefined));
+check("the forwarded content type is normalised before it reaches the browser",
+  normalizeContentType("image/png; charset=utf-8") === "image/png" &&
+  normalizeContentType("IMAGE/PNG") === "image/png" &&
+  normalizeContentType("image/x-icon") === "image/x-icon" &&
+  normalizeContentType("image/svg+xml") === "image/svg+xml; charset=utf-8");
+
+const iconPageHtml = [
+  "<html><head>",
+  '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">',
+  "<link rel='stylesheet' href='/app.css'>",
+  '<link rel="icon" type="image/svg+xml" href="/clauseguard-logo.svg">',
+  '<link rel="shortcut icon" href="https://cdn.example.com/favicon.ico">',
+  "</head><body></body></html>",
+].join("");
+check("the icon a page declares wins over an apple-touch tile",
+  extractIconHref(iconPageHtml, "https://clause.stackbuildco.com/features") ===
+    "https://clause.stackbuildco.com/clauseguard-logo.svg" &&
+  extractIconHref('<link rel="apple-touch-icon" href="/tile.png">', "https://warp.dev/") ===
+    "https://warp.dev/tile.png");
+check("an icon href is resolved against the page and protocol-checked",
+  extractIconHref('<link rel="icon" href="mark.svg">', "https://warp.dev/docs/") ===
+    "https://warp.dev/docs/mark.svg" &&
+  extractIconHref('<link rel="icon" href="data:image/png;base64,AAAA">', "https://warp.dev/") === null &&
+  extractIconHref('<link rel="icon" href="javascript:alert(1)">', "https://warp.dev/") === null &&
+  extractIconHref('<link rel="mask-icon" href="/mask.svg">', "https://warp.dev/") === null &&
+  extractIconHref("<html><head></head></html>", "https://warp.dev/") === null &&
+  extractIconHref("", "https://warp.dev/") === null &&
+  extractIconHref("<link rel=icon href=/mark.svg>", "not a url") === null);
+
+const avatar = (label: string, size: number = DEFAULT_ICON_SIZE): string => avatarSvg(label, size);
+check("a domain with no usable icon still gets a deterministic brand avatar",
+  avatar("scribeswift.stackbuildco.com").includes(">S</text>") &&
+  avatar("www.warp.dev").includes(">W</text>") &&
+  avatar("").includes(">?</text>") &&
+  avatar("warp.dev") === avatar("warp.dev"));
+check("the avatar's label comes from the domain, never from raw markup",
+  iconLabel("  www.Devfolio.io ") === "D" &&
+  iconLabel("123tool.com") === "1" &&
+  iconLabel("!!!") === "!" &&
+  iconLabel("") === "?");
+check("avatar text is XML-escaped, so a hostile label cannot inject markup",
+  escapeXml(`<b>&"'</b>`) === "&lt;b&gt;&amp;&quot;&apos;&lt;/b&gt;" &&
+  avatar("<img src=x onerror=alert(1)>").includes("&lt;img") &&
+  !avatar("<img src=x onerror=alert(1)>").includes("<img"));
+check("the avatar is a self-contained SVG sized by the clamped request",
+  avatar("warp.dev", 32).includes('width="32"') &&
+  avatar("warp.dev", 32).includes('height="32"') &&
+  avatar("warp.dev", pickIconSize("9999")).includes(`width="${MAX_ICON_SIZE}"`) &&
+  avatar("warp.dev").startsWith("<svg ") &&
+  avatar("warp.dev").endsWith("</svg>") &&
+  avatar("warp.dev").includes("url(#icon)"));
+check("the avatar's colour is stable per domain and varies between domains",
+  new Set(
+    [
+      "warp.dev",
+      "clause.stackbuildco.com",
+      "devfolio.stackbuildco.com",
+      "scribeswift.stackbuildco.com",
+      "raycast.com",
+    ].map((domain) => avatar(domain, MIN_ICON_SIZE)),
+  ).size > 1);
+
+section("api/favicon.ts - the endpoint that always answers with an icon");
+
+// The endpoint's contract is "always a 200 image", which is what removes the
+// empty circle from every card. `fetch` is stubbed per URL, and DNS is injected,
+// so each branch can be asserted without touching the network.
+type StubHttpResponse = {
+  ok: boolean;
+  status: number;
+  headers: { get: (name: string) => string | null };
+  body: null;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+};
+
+const binaryResponse = (
+  bytes: Buffer,
+  contentType: string,
+  status = 200,
+  declaredLength = bytes.byteLength,
+): StubHttpResponse => ({
+  ok: status >= 200 && status < 300,
+  status,
+  headers: {
+    get(name: string) {
+      const key = name.toLowerCase();
+      if (key === "content-type") return contentType;
+      if (key === "content-length") return String(declaredLength);
+      return null;
+    },
+  },
+  body: null,
+  arrayBuffer: async () => new Uint8Array(bytes).buffer as ArrayBuffer,
+});
+
+const redirectResponse = (location: string): StubHttpResponse => ({
+  ok: false,
+  status: 302,
+  headers: { get: (name: string) => (name.toLowerCase() === "location" ? location : null) },
+  body: null,
+  arrayBuffer: async () => new ArrayBuffer(0),
+});
+
+/**
+ * A `fetch` that answers exactly the URLs in `routes`. Anything else rejects,
+ * standing in for a host that does not resolve or refuses the connection.
+ */
+const iconRoutes =
+  (routes: Record<string, StubHttpResponse>) =>
+  (input: unknown): Promise<StubHttpResponse> => {
+    const target = typeof input === "string" ? input : String(input);
+    const route = routes[target];
+    return route ? Promise.resolve(route) : Promise.reject(new Error(`ENOTFOUND ${target}`));
+  };
+
+const callIcon = async (
+  url: string,
+  options: { method?: string; ip?: string } = {},
+): Promise<{
+  status: number;
+  source: string;
+  headers: Record<string, string>;
+  body: Buffer;
+  text: string;
+}> => {
+  const headers: Record<string, string> = {};
+  const response = {
+    statusCode: 0,
+    body: Buffer.alloc(0),
+    setHeader(name: string, value: string) {
+      headers[name.toLowerCase()] = String(value);
+    },
+    end(value?: Buffer | string) {
+      if (value !== undefined) {
+        response.body = Buffer.isBuffer(value) ? value : Buffer.from(value, "utf8");
+      }
+    },
+  };
+  const request = {
+    method: options.method ?? "GET",
+    url,
+    headers: options.ip ? { "x-forwarded-for": options.ip } : {},
+    socket: null,
+  };
+  await faviconHandler(request as unknown as IncomingMessage, response as unknown as ServerResponse);
+  return {
+    status: response.statusCode,
+    headers,
+    source: headers["x-icon-source"],
+    body: response.body,
+    text: response.body.toString("utf8"),
+  };
+};
+
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const SVG_BYTES = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>', "utf8");
+const SPA_HTML = '<html><head><link rel="icon" href="/clauseguard-logo.svg"></head></html>';
+
+setHostResolver(async () => [{ address: "93.184.216.34" }]);
+
+const directIcon = await withFetch(
+  iconRoutes({
+    "https://clause.stackbuildco.com/favicon.ico": binaryResponse(PNG_BYTES, "image/png"),
+  }),
+  () => callIcon("/api/favicon?domain=clause.stackbuildco.com&size=128"),
+);
+check("a site's own /favicon.ico is forwarded unchanged",
+  directIcon.status === 200 &&
+  directIcon.source === "favicon" &&
+  directIcon.headers["content-type"] === "image/png" &&
+  directIcon.body.equals(PNG_BYTES) &&
+  directIcon.headers["cache-control"].includes("immutable") &&
+  directIcon.headers["x-content-type-options"] === "nosniff" &&
+  !("content-security-policy" in directIcon.headers));
+
+// devfolio.stackbuildco.com answers `/favicon.ico` with `200 text/html` (Vercel's
+// SPA rewrite), so the icon has to be discovered from the page itself.
+const linkIcon = await withFetch(
+  iconRoutes({
+    "https://devfolio.stackbuildco.com/favicon.ico": binaryResponse(Buffer.from(SPA_HTML), "text/html; charset=utf-8"),
+    "https://devfolio.stackbuildco.com/": binaryResponse(Buffer.from(SPA_HTML), "text/html; charset=utf-8"),
+    "https://devfolio.stackbuildco.com/clauseguard-logo.svg": binaryResponse(SVG_BYTES, "image/svg+xml"),
+  }),
+  () => callIcon("/api/favicon?domain=devfolio.stackbuildco.com"),
+);
+check("an SPA's HTML `favicon.ico` is rejected and the page's own icon is used instead",
+  linkIcon.status === 200 &&
+  linkIcon.source === "link" &&
+  linkIcon.headers["content-type"] === "image/svg+xml; charset=utf-8" &&
+  linkIcon.body.equals(SVG_BYTES) &&
+  linkIcon.headers["content-security-policy"] === "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+
+const avatarIcon = await withFetch(
+  iconRoutes({
+    "https://parked.stackbuildco.com/favicon.ico": binaryResponse(Buffer.from("<html></html>"), "text/html"),
+    "https://parked.stackbuildco.com/": binaryResponse(Buffer.from("<html><head></head></html>"), "text/html"),
+  }),
+  () => callIcon("/api/favicon?domain=parked.stackbuildco.com"),
+);
+check("a site with no usable icon is answered with a generated avatar, not a 404",
+  avatarIcon.status === 200 &&
+  avatarIcon.source === "avatar" &&
+  avatarIcon.headers["content-type"] === "image/svg+xml; charset=utf-8" &&
+  avatarIcon.text.includes(">P</text>") &&
+  avatarIcon.headers["cache-control"].includes("max-age=3600"));
+
+const deadIcon = await withFetch(iconRoutes({}), () =>
+  callIcon("/api/favicon?domain=gone.stackbuildco.com"),
+);
+check("an unreachable host still answers 200 with an icon",
+  deadIcon.status === 200 && deadIcon.source === "avatar" && deadIcon.text.startsWith("<svg "));
+
+const hugeIcon = await withFetch(
+  iconRoutes({
+    "https://big.stackbuildco.com/favicon.ico": binaryResponse(PNG_BYTES, "image/png", 200, 900_000),
+    "https://big.stackbuildco.com/": binaryResponse(Buffer.from("<html></html>"), "text/plain"),
+  }),
+  () => callIcon("/api/favicon?domain=big.stackbuildco.com"),
+);
+const octetIcon = await withFetch(
+  iconRoutes({
+    "https://blob.stackbuildco.com/favicon.ico": binaryResponse(PNG_BYTES, "application/octet-stream"),
+  }),
+  () => callIcon("/api/favicon?domain=blob.stackbuildco.com"),
+);
+check("an oversized or non-image upstream body is never proxied through",
+  hugeIcon.source === "avatar" &&
+  octetIcon.source === "avatar" &&
+  octetIcon.headers["content-type"].startsWith("image/svg+xml"));
+
+// The redirect hop is where an SSRF attempt would land, so it is asserted on the
+// endpoint rather than only on the guard.
+const ssrfIcon = await withFetch(
+  iconRoutes({
+    "https://evil.stackbuildco.com/favicon.ico": redirectResponse("http://169.254.169.254/latest/meta-data/"),
+    "https://evil.stackbuildco.com/": binaryResponse(Buffer.from("<html><head></head></html>"), "text/html"),
+  }),
+  () => callIcon("/api/favicon?domain=evil.stackbuildco.com"),
+);
+const cdnIcon = await withFetch(
+  iconRoutes({
+    "https://shorthand.stackbuildco.com/favicon.ico": redirectResponse("https://cdn.example.com/mark.ico"),
+    "https://cdn.example.com/mark.ico": binaryResponse(PNG_BYTES, "image/x-icon"),
+  }),
+  () => callIcon("/api/favicon?domain=shorthand.stackbuildco.com"),
+);
+const loopIcon = await withFetch(
+  iconRoutes({
+    "https://loop.stackbuildco.com/favicon.ico": redirectResponse("https://loop.stackbuildco.com/favicon.ico"),
+  }),
+  () => callIcon("/api/favicon?domain=loop.stackbuildco.com"),
+);
+check("a redirect into the deployment's own network is refused",
+  ssrfIcon.status === 200 && ssrfIcon.source === "avatar");
+check("a redirect to a public host is followed",
+  cdnIcon.status === 200 &&
+  cdnIcon.source === "favicon" &&
+  cdnIcon.headers["content-type"] === "image/x-icon" &&
+  cdnIcon.body.equals(PNG_BYTES));
+check("a redirect loop is abandoned instead of followed forever",
+  loopIcon.status === 200 && loopIcon.source === "avatar");
+
+// A request we cannot attribute to a public host must never become a fetch - and
+// it still has to answer with an image, because the browser has already asked.
+const invalidIcons = await withFetch(iconRoutes({}), async () => [
+  await callIcon("/api/favicon"),
+  await callIcon("/api/favicon?domain=localhost"),
+  await callIcon(`/api/favicon?domain=${encodeURIComponent("https://warp.dev/")}`),
+]);
+check("a missing, local or URL-shaped domain is answered with the avatar, never a fetch",
+  invalidIcons.every(
+    (response) =>
+      response.status === 400 &&
+      response.source === "invalid" &&
+      response.headers["content-type"] === "image/svg+xml; charset=utf-8" &&
+      response.headers["cache-control"] === "no-store" &&
+      response.text.includes("<svg "),
+  ));
+
+const resizedIcon = await withFetch(iconRoutes({}), () =>
+  callIcon("/api/favicon?domain=warp.dev&size=9999"),
+);
+check("the avatar honours `?size=` inside its clamp",
+  resizedIcon.status === 200 && resizedIcon.text.includes(`width="${MAX_ICON_SIZE}"`));
+
+const headIcon = await withFetch(
+  iconRoutes({
+    "https://clause.stackbuildco.com/favicon.ico": binaryResponse(PNG_BYTES, "image/png"),
+  }),
+  () => callIcon("/api/favicon?domain=clause.stackbuildco.com", { method: "HEAD" }),
+);
+const postIcon = await withFetch(iconRoutes({}), () =>
+  callIcon("/api/favicon?domain=warp.dev", { method: "POST" }),
+);
+check("HEAD answers with the same headers and no body",
+  headIcon.status === 200 &&
+  headIcon.source === "favicon" &&
+  headIcon.headers["content-length"] === String(PNG_BYTES.byteLength) &&
+  headIcon.body.byteLength === 0);
+check("only GET and HEAD are served",
+  postIcon.status === 405 &&
+  postIcon.headers["allow"] === "GET, HEAD" &&
+  postIcon.headers["cache-control"] === "no-store");
+
+// One card per listing means one request per listing, so the ceiling is per
+// client and generous - but it must exist, and a throttled response must still be
+// an image rather than a broken one.
+resetRateLimits();
+const throttledStatuses: number[] = [];
+for (let attempt = 0; attempt < 122; attempt += 1) {
+  throttledStatuses.push(
+    (await callIcon("/api/favicon?domain=localhost", { ip: "203.0.113.7" })).status,
+  );
+}
+const blockedIcon = await callIcon("/api/favicon?domain=localhost", { ip: "203.0.113.7" });
+const otherClientIcon = await callIcon("/api/favicon?domain=localhost", { ip: "198.51.100.9" });
+check("one client cannot turn the deployment into an icon farm",
+  throttledStatuses.filter((status) => status === 400).length === 120 &&
+  throttledStatuses[120] === 429 &&
+  throttledStatuses[121] === 429 &&
+  blockedIcon.status === 429 &&
+  blockedIcon.source === "throttled" &&
+  Number(blockedIcon.headers["retry-after"]) >= 1);
+check("a throttled response is still an image and another client is unaffected",
+  blockedIcon.headers["content-type"] === "image/svg+xml; charset=utf-8" &&
+  blockedIcon.text.includes("<svg ") &&
+  otherClientIcon.status === 400 &&
+  otherClientIcon.text.includes("<svg "));
+resetRateLimits();
+
+check("every branch - icon, avatar, invalid, throttled - answered with an image",
+  [
+    directIcon,
+    linkIcon,
+    avatarIcon,
+    deadIcon,
+    hugeIcon,
+    octetIcon,
+    ssrfIcon,
+    cdnIcon,
+    loopIcon,
+    headIcon,
+    resizedIcon,
+  ].every(
+    (response) =>
+      response.status === 200 && response.headers["content-type"].startsWith("image/"),
+  ) &&
+    blockedIcon.headers["content-type"].startsWith("image/"));
+
+// Restore real DNS for anything that runs after this point.
+setHostResolver(null);
 
 section("api/_lib/ogText.ts - generated card fields");
 

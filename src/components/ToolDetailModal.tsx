@@ -34,11 +34,11 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
   const toolIconUrl = getSafeWebsiteUrl(tool?.icon_url);
   const toolFaviconUrl = getFaviconUrl(tool?.website_url);
   const hasToolIcon = Boolean(toolIconUrl);
-  // Ordered logo chain: custom icon -> Google favicon -> hard-coded fallback ->
-  // letter avatar. `logoFailed` used to be a second source of truth; it is now
-  // derived from the chain position, so the two cannot disagree. The lazy
-  // initialiser means the first paint (and SSR) already shows the real logo
-  // rather than flashing the avatar.
+  // Ordered logo chain: custom icon -> /api/favicon (the site's own icon, or a
+  // generated avatar) -> letter avatar. `logoFailed` used to be a second source
+  // of truth; it is now derived from the chain position, so the two cannot
+  // disagree. The lazy initialiser means the first paint (and SSR) already shows
+  // the real logo rather than flashing the avatar.
   const [logoSource, setLogoSource] = useState<ToolImageSource>(() =>
     initialToolImageSource(hasToolIcon, Boolean(toolFaviconUrl)),
   );
@@ -182,7 +182,7 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
                 alt={`${tool.name} logo`}
                 className="h-full w-full object-cover"
                 // Advances down the shared source chain and stops at the avatar,
-                // so a dead icon (or a dead fallback URL) cannot loop.
+                // so a dead icon URL cannot loop.
                 onError={(event) => {
                   const image = event.currentTarget as HTMLImageElement;
                   console.warn(

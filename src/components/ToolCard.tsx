@@ -124,9 +124,9 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                 alt={`${tool.name} logo`}
                 loading="lazy"
                 referrerPolicy="no-referrer"
-                // A broken icon advances one step down the source chain
-                // (custom -> favicon -> hard-coded fallback -> initials avatar)
-                // and never jumps back, so a dead fallback URL cannot loop.
+                // A broken icon advances one step down the shared source chain
+                // (custom -> /api/favicon -> initials avatar) and never jumps
+                // back, so a dead icon URL cannot loop.
                 onError={(event) => {
                   const image = event.currentTarget as HTMLImageElement;
                   console.warn(

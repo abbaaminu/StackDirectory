@@ -1,6 +1,5 @@
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
 import type { IncomingMessage, ServerResponse } from "http";
+import { resolvePublicUrl } from "./_lib/publicUrl";
 import { clientIpFromRequest, consumeRateLimit } from "./_lib/rateLimit";
 
 type MetadataRequest = IncomingMessage & { body?: unknown };
@@ -63,56 +62,6 @@ function decodeHtml(value: string): string {
     .replace(/&gt;/gi, ">")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function isPublicAddress(address: string): boolean {
-  if (isIP(address) === 4) {
-    const octets = address.split(".").map(Number);
-    const [first, second] = octets;
-    return !(
-      first === 0 || first === 10 || first === 127 || first >= 224 ||
-      (first === 169 && second === 254) ||
-      (first === 172 && second >= 16 && second <= 31) ||
-      (first === 192 && second === 168) ||
-      (first === 100 && second >= 64 && second <= 127)
-    );
-  }
-  if (isIP(address) === 6) {
-    const normalized = address.toLowerCase();
-    return !(
-      normalized === "::" || normalized === "::1" ||
-      normalized.startsWith("fc") || normalized.startsWith("fd") ||
-      /^fe[89ab]/.test(normalized) || normalized.startsWith("::ffff:")
-    );
-  }
-  return false;
-}
-
-async function validatePublicUrl(value: string): Promise<URL> {
-  const url = new URL(value);
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("Only public HTTP or HTTPS websites can be inspected.");
-  }
-  if (url.username || url.password) {
-    throw new Error("Website URLs cannot contain credentials.");
-  }
-  const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
-  if (
-    !hostname.includes(".") ||
-    hostname === "localhost" ||
-    hostname.endsWith(".localhost") ||
-    hostname.endsWith(".local")
-  ) {
-    throw new Error("Enter a publicly accessible website URL.");
-  }
-
-  const addresses = isIP(hostname)
-    ? [{ address: hostname }]
-    : await lookup(hostname, { all: true, verbatim: true });
-  if (addresses.length === 0 || addresses.some(({ address }) => !isPublicAddress(address))) {
-    throw new Error("The website host must resolve to a public IP address.");
-  }
-  return url;
 }
 
 async function readHtml(response: Response): Promise<string> {
@@ -210,7 +159,7 @@ function extractMetadata(html: string, pageUrl: URL): WebsiteMetadata {
 }
 
 async function fetchPage(initialUrl: string): Promise<{ html: string; url: URL }> {
-  let currentUrl = await validatePublicUrl(initialUrl);
+  let currentUrl = await resolvePublicUrl(initialUrl);
   const deadline = Date.now() + TOTAL_BUDGET_MS;
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
     // Each hop gets whatever is left of the shared budget, so a chain of slow
@@ -231,7 +180,7 @@ async function fetchPage(initialUrl: string): Promise<{ html: string; url: URL }
         if (!location || redirects === MAX_REDIRECTS) {
           throw new Error("Website redirected too many times.");
         }
-        currentUrl = await validatePublicUrl(new URL(location, currentUrl).toString());
+        currentUrl = await resolvePublicUrl(new URL(location, currentUrl).toString());
         continue;
       }
       if (!response.ok) throw new Error(`Website returned HTTP ${response.status}.`);
