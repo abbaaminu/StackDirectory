@@ -42,6 +42,7 @@ import { getAdminEmails, isAdminEmail, isAdminUser } from "../src/lib/admin";
 import {
   ADMIN_TOOLS_ENDPOINT,
   callAdminToolAction,
+  callAdminToolsList,
   isAdminApiUnavailable,
 } from "../src/lib/adminTools";
 import {
@@ -404,8 +405,8 @@ check("Admin queue refuses non-admins",
       isOpen
       onClose={noop}
       user={{ email: "random@example.com", app_metadata: {} } as never}
-      onSetFeature={noop}
-      onSetForSale={noop}
+      onSetFeature={async () => true}
+      onSetForSale={async () => true}
     />,
   ).includes("Admin access required"));
 
@@ -415,8 +416,8 @@ check("Admin queue renders for allow-listed admins",
       isOpen
       onClose={noop}
       user={{ email: "admin@example.com", app_metadata: {} } as never}
-      onSetFeature={noop}
-      onSetForSale={noop}
+      onSetFeature={async () => true}
+      onSetForSale={async () => true}
     />,
   ).includes("Pending Review Queue"));
 
@@ -905,6 +906,17 @@ check("a delete posts its action to the admin endpoint",
 check("the mutation carries the admin's Supabase access token",
   apiCalls[0]?.authorization === "Bearer access-token-1");
 
+apiCalls.length = 0;
+const queueList = await withFetch(
+  adminApiStub({ success: true, tools: [{ id: "queue-row", name: "Queue row" }] }),
+  () => callAdminToolsList("access-token-1"),
+);
+check("the queue client loads rows through the authenticated admin endpoint",
+  queueList.ok &&
+  queueList.tools[0]?.id === "queue-row" &&
+  apiCalls[0]?.url === ADMIN_TOOLS_ENDPOINT &&
+  JSON.parse(apiCalls[0]?.body ?? "{}").action === "list");
+
 const rejectedCall = await withFetch(
   adminApiStub({ success: false, error: "not an admin" }, 403),
   () => callAdminToolAction("delete", "abc", "access-token-1"),
@@ -1016,6 +1028,19 @@ const invokeAdmin = (
 
 check("GET is rejected with 405", (await invoke(adminToolsHandler, { method: "GET" })).status === 405);
 
+const queueRows = [{ id: deleteRowId, name: "Pending queue row", seller_contact: "owner@example.com" }];
+const queueBackend = createAdminStub({ rows: queueRows });
+const queueResponse = await invokeAdmin(queueBackend.stub, { action: "list" });
+const queueRestCall = queueBackend.calls.find((call) => call.url.includes("/rest/v1/tools"));
+check("the admin list action returns service-role-visible tool rows",
+  queueResponse.status === 200 &&
+  queueResponse.body?.success === true &&
+  Array.isArray(queueResponse.body?.tools) &&
+  (queueResponse.body?.tools as Array<{ seller_contact?: string }>)[0]?.seller_contact === "owner@example.com" &&
+  queueRestCall?.method === "GET" &&
+  `${queueRestCall.authorization}${queueRestCall.apiKey}`.includes("service-role-key"),
+  JSON.stringify(queueResponse.body));
+
 const unknownAction = await invokeAdmin(createAdminStub().stub, { action: "drop_everything" });
 check("an unknown action is rejected with 400",
   unknownAction.status === 400, JSON.stringify(unknownAction.body));
@@ -1096,7 +1121,10 @@ const failedApprovalEmailBackend = createAdminStub({
 });
 const failedApprovalEmailResult = await invokeAdmin(failedApprovalEmailBackend.stub, {
   action: "approve",
-  env: { RESEND_API_KEY: "re_test" },
+  env: {
+    RESEND_API_KEY: "re_test",
+    RESEND_FROM_EMAIL: "StackDirectory <noreply@example.com>",
+  },
 });
 check("Resend delivery failure does not fail the successful database approval",
   failedApprovalEmailResult.status === 200 &&
@@ -1252,8 +1280,3 @@ if (failures.length > 0) {
 }
 
 console.log("All checks passed.");
-
-
-
-
-

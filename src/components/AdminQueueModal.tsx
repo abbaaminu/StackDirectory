@@ -13,7 +13,11 @@ import type { User } from "@supabase/supabase-js";
 import { Tool } from "../types/directory";
 import supabase, { isSupabaseConfigured } from "../lib/supabase";
 import { isAdminUser } from "../lib/admin";
-import { callAdminToolAction, isAdminApiUnavailable } from "../lib/adminTools";
+import {
+  callAdminToolAction,
+  callAdminToolsList,
+  isAdminApiUnavailable,
+} from "../lib/adminTools";
 import { getToolSlug } from "../lib/toolSlug";
 import { readJsonArray, STORAGE_KEYS, writeJsonArray } from "../lib/localStore";
 import { useModalDismiss } from "../lib/useModalDismiss";
@@ -22,8 +26,8 @@ interface AdminQueueModalProps {
   isOpen: boolean;
   onClose: () => void;
   user?: User | null;
-  onSetFeature: (toolId: string, isFeatured: boolean) => void;
-  onSetForSale: (toolId: string, isForSale: boolean) => void;
+  onSetFeature: (toolId: string, isFeatured: boolean) => Promise<boolean>;
+  onSetForSale: (toolId: string, isForSale: boolean) => Promise<boolean>;
   /** Lets App drop a deleted listing from the directory grid immediately. */
   onToolDeleted?: (toolId: string) => void;
 }
@@ -71,17 +75,18 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
         return;
       }
 
-      const { data, error } = await supabase
-        .from("tools")
-        .select("*")
-        .order("created_at", { ascending: false });
-
       if (cancelled) return;
-      if (error) {
-        setQueueError(error.message);
-      } else {
-        setAllTools((data as Tool[]) ?? []);
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (sessionError || !token) {
+        setQueueError(sessionError?.message || "Sign in again as an administrator to load submissions.");
+        setIsLoading(false);
+        return;
       }
+      const result = await callAdminToolsList(token);
+      if (cancelled) return;
+      if (!result.ok) setQueueError(result.error ?? "Could not load submissions.");
+      else setAllTools(result.tools);
       setIsLoading(false);
     };
 
@@ -297,20 +302,36 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
     finishDelete();
   };
 
-  const handleSetFeature = (tool: Tool) => {
+  const handleSetFeature = async (tool: Tool) => {
     const isFeatured = !tool.is_featured;
-    setAllTools((current) => current.map((item) =>
-      item.id === tool.id ? { ...item, is_featured: isFeatured } : item,
-    ));
-    onSetFeature(tool.id, isFeatured);
+    setUpdatingToolId(tool.id);
+    setQueueError(null);
+    const succeeded = await onSetFeature(tool.id, isFeatured);
+    if (succeeded) {
+      setAllTools((current) => current.map((item) =>
+        item.id === tool.id ? { ...item, is_featured: isFeatured } : item,
+      ));
+      setQueueNotice(`"${tool.name}" ${isFeatured ? "featured" : "removed from featured"} in Supabase.`);
+    } else {
+      setQueueError(`Could not ${isFeatured ? "feature" : "unfeature"} "${tool.name}".`);
+    }
+    setUpdatingToolId(null);
   };
 
-  const handleSetForSale = (tool: Tool) => {
+  const handleSetForSale = async (tool: Tool) => {
     const isForSale = !tool.is_for_sale;
-    setAllTools((current) => current.map((item) =>
-      item.id === tool.id ? { ...item, is_for_sale: isForSale } : item,
-    ));
-    onSetForSale(tool.id, isForSale);
+    setUpdatingToolId(tool.id);
+    setQueueError(null);
+    const succeeded = await onSetForSale(tool.id, isForSale);
+    if (succeeded) {
+      setAllTools((current) => current.map((item) =>
+        item.id === tool.id ? { ...item, is_for_sale: isForSale } : item,
+      ));
+      setQueueNotice(`"${tool.name}" ${isForSale ? "listed for sale" : "removed from sale"}.`);
+    } else {
+      setQueueError(`Could not update the sale status for "${tool.name}".`);
+    }
+    setUpdatingToolId(null);
   };
 
   if (!isOpen) return null;
@@ -440,6 +461,19 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                       )}
                     </div>
                     <p className="text-xs text-zinc-400">{tool.tagline}</p>
+                    <p className="text-[11px] text-zinc-400">
+                      Submitted by{" "}
+                      {tool.seller_contact ? (
+                        <a
+                          href={`mailto:${tool.seller_contact}`}
+                          className="text-amber-300 hover:underline"
+                        >
+                          {tool.seller_contact}
+                        </a>
+                      ) : (
+                        <span className="text-zinc-500">email not provided</span>
+                      )}
+                    </p>
                     <p className="text-[11px] text-zinc-500">
                       Submitted {new Date(tool.created_at).toLocaleString()}
                     </p>
@@ -468,17 +502,19 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => handleSetFeature(tool)}
+                      onClick={() => void handleSetFeature(tool)}
+                      disabled={updatingToolId === tool.id}
                       className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition"
                       title={tool.is_featured ? "Remove featured status" : "Promote to Featured"}
                     >
                       <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                      <span>Feature</span>
+                      <span>{tool.is_featured ? "Unfeature" : "Feature"}</span>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => handleSetForSale(tool)}
+                      onClick={() => void handleSetForSale(tool)}
+                      disabled={updatingToolId === tool.id}
                       className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 transition"
                       title="Toggle acquisition listing"
                     >

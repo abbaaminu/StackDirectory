@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ChevronUp,
   Handshake,
@@ -31,16 +31,17 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   const [isUpvoteAnimating, setIsUpvoteAnimating] = useState(false);
   const domain = getHostname(tool.website_url);
   const hasCustomIcon = Boolean(tool.icon_url?.trim());
-  const [logoSource, setLogoSource] = useState<"custom" | "unavatar" | "initial">(
-    hasCustomIcon ? "custom" : domain ? "unavatar" : "initial",
-  );
-
-  const unavatarUrl = domain
-    ? `https://unavatar.io/${domain}?fallback=false`
+  const faviconUrl = domain
+    ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`
     : null;
-  const logoSrc = logoSource === "custom"
-    ? tool.icon_url?.trim()
-    : unavatarUrl;
+  const [logoSource, setLogoSource] = useState<"custom" | "favicon" | "initial">(
+    hasCustomIcon ? "custom" : faviconUrl ? "favicon" : "initial",
+  );
+  const logoSrc = logoSource === "custom" ? tool.icon_url?.trim() : faviconUrl;
+
+  useEffect(() => {
+    setLogoSource(hasCustomIcon ? "custom" : faviconUrl ? "favicon" : "initial");
+  }, [tool.id, tool.icon_url, faviconUrl, hasCustomIcon]);
 
   const handleUpvote = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -112,7 +113,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                 alt={`${tool.name} logo`}
                 loading="lazy"
                 referrerPolicy="no-referrer"
-                onError={() => setLogoSource((current) => current === "custom" && unavatarUrl ? "unavatar" : "initial")}
+                onError={() => setLogoSource((current) => current === "custom" && faviconUrl ? "favicon" : "initial")}
                 className="w-full h-full object-cover"
               />
             ) : (

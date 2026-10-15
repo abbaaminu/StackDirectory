@@ -13,8 +13,10 @@
  * Supabase client here) so this module stays a pure `fetch` caller and can be
  * unit tested with a stubbed network.
  */
+import type { Tool } from "../types/directory";
 
 export type AdminToolAction =
+  | "list"
   | "approve"
   | "reject"
   | "delete"
@@ -36,6 +38,57 @@ export type AdminActionResult = {
 
 /** URL of the admin mutation endpoint (Vercel Serverless Function). */
 export const ADMIN_TOOLS_ENDPOINT = "/api/admin-tools";
+
+export type AdminToolsListResult = {
+  ok: boolean;
+  tools: Tool[];
+  status: number;
+  error?: string;
+};
+
+/** Loads admin-visible listings through the authenticated service-role route. */
+export const callAdminToolsList = async (
+  accessToken: string,
+): Promise<AdminToolsListResult> => {
+  if (!accessToken?.trim()) {
+    return {
+      ok: false,
+      tools: [],
+      status: 401,
+      error: "Sign in as an administrator and try again.",
+    };
+  }
+
+  try {
+    const response = await fetch(ADMIN_TOOLS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ action: "list" }),
+    });
+    const result = (await response.json().catch(() => null)) as
+      | { success?: boolean; tools?: Tool[]; error?: string }
+      | null;
+    if (!response.ok || result?.success !== true || !Array.isArray(result.tools)) {
+      return {
+        ok: false,
+        tools: [],
+        status: response.status,
+        error: result?.error ?? `The admin API rejected the request (HTTP ${response.status}).`,
+      };
+    }
+    return { ok: true, tools: result.tools, status: response.status };
+  } catch (error) {
+    return {
+      ok: false,
+      tools: [],
+      status: 0,
+      error: error instanceof Error ? error.message : "The admin API could not be reached.",
+    };
+  }
+};
 
 /**
  * True when the failure is "the endpoint is missing or misconfigured" (no

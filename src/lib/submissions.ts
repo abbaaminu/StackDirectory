@@ -58,11 +58,9 @@ export const isDuplicateRowError = (
  *
  * It deliberately has **no `icon_url`**. The live table has never had that
  * column, so sending it made PostgREST reject the entire insert with
- * `42703 column tools.icon_url does not exist` — and because the caller treated
- * every insert error as "fall back to a browser-only save", the rejection looked
- * like a successful submission while the review queue stayed empty. Icons are
- * derived from `website_url` in the UI instead (ToolCard / ToolDetailModal fall
- * back to unavatar.io / icon.horse), so nothing is lost.
+ * `42703 column tools.icon_url does not exist`. Icons are derived from
+ * `website_url` in the UI instead, with a Google favicon and brand-colored
+ * initial fallback.
  *
  * `scripts/verify.tsx` asserts `buildToolInsertRow` never grows a key outside
  * this list, so future column drift fails loudly instead of silently.

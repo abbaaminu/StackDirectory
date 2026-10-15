@@ -221,14 +221,14 @@ export default function App() {
     toolId: string,
     updates: Partial<Tool>,
     action: AdminToolAction,
-  ) => {
+  ): Promise<boolean> => {
     if (!isSupabaseConfigured || !supabase) {
       const next = readJsonArray<Tool>(STORAGE_KEYS.tools).map((tool) =>
         tool.id === toolId ? { ...tool, ...updates } : tool,
       );
       writeJsonArray(STORAGE_KEYS.tools, next);
       await fetchApprovedTools();
-      return;
+      return true;
     }
 
     // The review queue's Feature / For Sale toggles go through the same
@@ -240,11 +240,11 @@ export default function App() {
       const result = await callAdminToolAction(action, toolId, token);
       if (result.ok) {
         await fetchApprovedTools();
-        return;
+        return true;
       }
       if (!isAdminApiUnavailable(result)) {
         showToast(`❌ ${result.error ?? "Could not update this listing."}`);
-        return;
+        return false;
       }
     }
 
@@ -256,9 +256,10 @@ export default function App() {
 
     if (error || !Array.isArray(updatedRows) || updatedRows.length === 0) {
       showToast("❌ Could not update this listing (the write was blocked or matched no row).");
-      return;
+      return false;
     }
     await fetchApprovedTools();
+    return true;
   };
 
   const handleSignOut = async () => {
@@ -356,6 +357,21 @@ export default function App() {
     setTools((current) => current.filter((tool) => tool.id !== toolId));
     setSelectedDetailTool((current) => (current?.id === toolId ? null : current));
     showToast("🗑️ Listing deleted from Supabase.");
+  };
+
+  const handleAdminDeleteTool = async (toolId: string): Promise<boolean> => {
+    const token = session?.access_token;
+    if (!isAdmin || !token) {
+      showToast("❌ Sign in as an administrator to delete listings.");
+      return false;
+    }
+    const result = await callAdminToolAction("delete", toolId, token);
+    if (!result.ok) {
+      showToast(`❌ ${result.error ?? "Could not delete this listing."}`);
+      return false;
+    }
+    handleToolDeleted(toolId);
+    return true;
   };
 
   // Toggle upvote: increment/decrement upvotes in Supabase
@@ -805,9 +821,11 @@ export default function App() {
       <ToolDetailModal
         isOpen={Boolean(selectedDetailTool)}
         tool={selectedDetailTool}
+        isAdmin={isAdmin}
         onClose={closeToolDetails}
         onToggleUpvote={(toolId) => void handleToggleUpvote(toolId)}
         onToggleFavorite={handleToggleFavorite}
+        onAdminDelete={handleAdminDeleteTool}
         onOpenAcquisition={(tool) => {
           setSelectedDetailTool(null);
           setSelectedAcquisitionTool(tool);
@@ -834,8 +852,8 @@ export default function App() {
         isOpen={isAdminQueueOpen}
         onClose={() => setIsAdminQueueOpen(false)}
         user={session?.user}
-        onSetFeature={(toolId, isFeatured) => void updateAdminTool(toolId, { is_featured: isFeatured }, isFeatured ? "feature" : "unfeature")}
-        onSetForSale={(toolId, isForSale) => void updateAdminTool(toolId, { is_for_sale: isForSale }, isForSale ? "for_sale" : "unlist")}
+        onSetFeature={(toolId, isFeatured) => updateAdminTool(toolId, { is_featured: isFeatured }, isFeatured ? "feature" : "unfeature")}
+        onSetForSale={(toolId, isForSale) => updateAdminTool(toolId, { is_for_sale: isForSale }, isForSale ? "for_sale" : "unlist")}
         onToolDeleted={handleToolDeleted}
       />}
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Check, ChevronUp, Copy, ExternalLink, Handshake, Heart, Share2, X } from "lucide-react";
+import { Check, ChevronUp, Copy, ExternalLink, Handshake, Heart, Share2, Trash2, X } from "lucide-react";
 import type { Tool } from "../types/directory";
 import { handleVisitWebsite } from "../lib/trackToolClick";
 import { getHostname } from "../lib/toolDisplay";
@@ -13,6 +13,8 @@ interface ToolDetailModalProps {
   onToggleUpvote: (toolId: string) => void;
   onToggleFavorite?: (toolId: string) => void;
   onOpenAcquisition?: (tool: Tool) => void;
+  isAdmin?: boolean;
+  onAdminDelete?: (toolId: string) => Promise<boolean>;
 }
 
 export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
@@ -22,12 +24,16 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
   onToggleUpvote,
   onToggleFavorite,
   onOpenAcquisition,
+  isAdmin = false,
+  onAdminDelete,
 }) => {
   const [logoSource, setLogoSource] = useState("");
   const [logoFailed, setLogoFailed] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
   const [shareNotice, setShareNotice] = useState("");
+  const [confirmAdminDelete, setConfirmAdminDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Escape closes the detail modal and freezes the grid scrolling behind it.
   useModalDismiss(isOpen, onClose);
@@ -35,11 +41,16 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
   useEffect(() => {
     if (tool) {
       const hostname = getHostname(tool.website_url) ?? "";
-      setLogoSource(tool.icon_url || `https://icon.horse/icon/${hostname}`);
-      setLogoFailed(false);
+      const favicon = hostname
+        ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=128`
+        : "";
+      setLogoSource(tool.icon_url?.trim() || favicon);
+      setLogoFailed(!tool.icon_url?.trim() && !favicon);
       setIsCopied(false);
       setIsShareMenuOpen(false);
       setShareNotice("");
+      setConfirmAdminDelete(false);
+      setIsDeleting(false);
     }
   }, [tool]);
 
@@ -79,7 +90,9 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
   if (!isOpen || !tool) return null;
 
   const hostname = getHostname(tool.website_url) ?? "";
-  const fallback = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
+  const fallback = hostname
+    ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=128`
+    : "";
   const shareTitle = `${tool.name} - StackDirectory`;
   const shareText = `Check out ${tool.name} on StackDirectory!`;
 
@@ -171,7 +184,7 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
                 alt={`${tool.name} logo`}
                 className="h-full w-full object-cover"
                 onError={() => {
-                  if (logoSource !== fallback) setLogoSource(fallback);
+                  if (fallback && logoSource !== fallback) setLogoSource(fallback);
                   else setLogoFailed(true);
                 }}
               />
@@ -263,6 +276,43 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
             <ChevronUp className="h-4 w-4" />
             {tool.user_has_upvoted ? "Upvoted" : "Upvote"} ({tool.upvotes})
           </button>
+          {isAdmin && onAdminDelete && (
+            confirmAdminDelete ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    const deleted = await onAdminDelete(tool.id);
+                    setIsDeleting(false);
+                    if (deleted) setConfirmAdminDelete(false);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-500 disabled:opacity-60"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {isDeleting ? "Deleting..." : "Confirm delete"}
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setConfirmAdminDelete(false)}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmAdminDelete(true)}
+                className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Admin Delete
+              </button>
+            )
+          )}
         </div>
       </article>
     </div>

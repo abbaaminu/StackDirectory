@@ -6,7 +6,7 @@ import type { IncomingMessage, ServerResponse } from "http";
  * Admin moderation endpoint — Vercel Serverless Function
  *
  * Endpoint: POST /api/admin-tools
- * Body:     { action: AdminToolAction, toolId: string }
+ * Body:     { action: "list" } or { action: AdminToolAction, toolId: string }
  * Headers:  Authorization: Bearer <Supabase access token>
  *
  * Why this exists
@@ -19,8 +19,8 @@ import type { IncomingMessage, ServerResponse } from "http";
  * This function:
  *   1. requires the caller's Supabase access token and resolves the user,
  *   2. re-checks the admin allow-list / `app_metadata.role` server-side, and
- *   3. applies the mutation with SUPABASE_SERVICE_ROLE_KEY (RLS bypassed),
- *      returning how many rows were actually affected.
+ *   3. reads the admin queue or applies a mutation with
+ *      SUPABASE_SERVICE_ROLE_KEY (RLS bypassed).
  *
  * Secrets are read from `process.env` only and never reach the browser.
  */
@@ -34,6 +34,7 @@ type AdminRequest = IncomingMessage & {
  * scripts/verify.tsx, which exercises both).
  */
 type AdminToolAction =
+  | "list"
   | "approve"
   | "reject"
   | "delete"
@@ -43,6 +44,7 @@ type AdminToolAction =
   | "unlist";
 
 const ADMIN_ACTIONS: readonly AdminToolAction[] = [
+  "list",
   "approve",
   "reject",
   "delete",
@@ -168,11 +170,18 @@ async function sendApprovalNotification(tool: {
 }): Promise<void> {
   const submitterEmail =
     typeof tool.seller_contact === "string" ? tool.seller_contact.trim() : "";
-  if (!submitterEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(submitterEmail)) return;
+  if (!submitterEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(submitterEmail)) {
+    console.error(
+      `[Admin Tools] Approval email skipped for listing ${tool.id}: submitter email is missing or invalid.`,
+    );
+    return;
+  }
 
   try {
     const apiKey = process.env.RESEND_API_KEY?.trim();
     if (!apiKey) throw new Error("RESEND_API_KEY is not configured.");
+    const from = process.env.RESEND_FROM_EMAIL?.trim();
+    if (!from) throw new Error("RESEND_FROM_EMAIL is not configured.");
 
     const toolSlug =
       tool.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") ||
@@ -180,8 +189,7 @@ async function sendApprovalNotification(tool: {
     const listingUrl = `https://apps.stackbuildco.com/?tool=${encodeURIComponent(toolSlug)}`;
     const resend = new Resend(apiKey);
     const { error } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL?.trim() ||
-        "StackDirectory <onboarding@resend.dev>",
+      from,
       to: submitterEmail,
       subject: `${tool.name} is now live on StackDirectory`,
       html:
@@ -223,7 +231,7 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
       respond(res, 400, { success: false, error: "Unknown admin action." });
       return;
     }
-    if (!toolId) {
+    if (action !== "list" && !toolId) {
       respond(res, 400, { success: false, error: "Missing toolId." });
       return;
     }
@@ -276,6 +284,20 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
         error:
           "This account is not an administrator. Add it to ADMIN_EMAILS (or grant the `admin` app_metadata role).",
       });
+      return;
+    }
+
+    if (action === "list") {
+      const { data, error } = await supabaseAdmin
+        .from("tools")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) {
+        console.error("[Admin Tools] Queue fetch failed:", error.message);
+        respond(res, 500, { success: false, error: "Supabase rejected the queue request." });
+        return;
+      }
+      respond(res, 200, { success: true, tools: data ?? [] });
       return;
     }
 

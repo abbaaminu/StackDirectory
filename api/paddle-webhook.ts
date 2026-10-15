@@ -168,7 +168,12 @@ function buildPaidListingRow(
 
   const tagline = text(customData.tagline) || `${name} — featured listing on StackDirectory.`;
   const requestedPricing = text(customData.pricing_type);
-  const submitterEmail = text(customData.customer_email);
+  const submitterEmail =
+    text(customData.seller_contact) || text(customData.customer_email);
+  const techStack = text(customData.tech_stack)
+    .split(",")
+    .map((technology) => technology.trim())
+    .filter(Boolean);
 
   return {
     id: options.id,
@@ -190,7 +195,7 @@ function buildPaidListingRow(
     monthly_revenue: 0,
     monthly_profit: 0,
     seller_contact: submitterEmail || null,
-    tech_stack: [],
+    tech_stack: techStack,
   };
 }
 

@@ -53,7 +53,7 @@ const EMPTY_SUBMISSION: SubmissionFormState = {
   monthly_revenue: "",
   monthly_profit: "",
   seller_contact: "",
-  tech_stack: "Next.js, Supabase, Tailwind CSS",
+  tech_stack: "",
 };
 
 export const SubmitModal: React.FC<SubmitModalProps> = ({
@@ -76,6 +76,10 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
   /** Set when Paddle took the payment but the row could not be persisted. */
   const [paidSaveError, setPaidSaveError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const metadataRequestRef = useRef(0);
+  const manuallyEditedMetadataRef = useRef(
+    new Set<"name" | "tagline" | "description" | "tech_stack" | "pricing_type">(),
+  );
 
   /**
    * The paid listing waiting for Paddle's confirmation. Nothing is written to
@@ -213,6 +217,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       setPaymentError(null);
       setPaidSaveError(null);
       setFormData(EMPTY_SUBMISSION);
+      manuallyEditedMetadataRef.current.clear();
       pendingCheckoutToolRef.current = null;
       paidSubmissionHandledRef.current = false;
       onClose();
@@ -256,42 +261,90 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
   };
   finalizePaidSubmissionRef.current = () => void finalizePaidSubmission();
 
-  const handleAutoFill = async () => {
-    const details = getUrlDetails(formData.website_url);
+  const handleAutoFill = async (websiteUrl = formData.website_url) => {
+    const details = getUrlDetails(websiteUrl);
     if (!details) {
       setErrorMsg("Enter a valid website URL before using Auto-fill Details.");
       return;
     }
+    const requestId = metadataRequestRef.current + 1;
+    metadataRequestRef.current = requestId;
     setIsAutoFilling(true);
     setAutoFillMessage("");
     try {
-      const response = await fetch(details.normalized, { headers: { Accept: "text/html" } });
-      if (!response.ok) throw new Error("Website unavailable");
-      const html = await response.text();
-      const document = new DOMParser().parseFromString(html, "text/html");
-      const title = document.querySelector('meta[property="og:title"]')?.getAttribute("content") || document.title;
-      const description = document.querySelector('meta[property="og:description"]')?.getAttribute("content") || document.querySelector('meta[name="description"]')?.getAttribute("content");
-      const image = document.querySelector('meta[property="og:image"]')?.getAttribute("content");
+      const response = await fetch("/api/website-metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: details.normalized }),
+      });
+      const result = await response.json() as {
+        success?: boolean;
+        error?: string;
+        metadata?: {
+          title?: string;
+          tagline?: string;
+          description?: string;
+          iconUrl?: string;
+          techStack?: string[];
+          pricingType?: PricingType;
+        };
+      };
+      if (!response.ok || result.success !== true || !result.metadata) {
+        throw new Error(result.error || "Website metadata is unavailable.");
+      }
+      if (requestId !== metadataRequestRef.current) return;
+      const metadata = result.metadata;
       setFormData((current) => ({
         ...current,
-        name: current.name.trim() || title?.trim() || details.name,
-        tagline: current.tagline.trim() || description?.trim() || `A developer tool from ${details.domain}`,
-        description: current.description.trim() || description?.trim() || current.tagline.trim(),
-        icon_url: image || current.icon_url || `https://www.google.com/s2/favicons?domain=${details.domain}&sz=128`,
+        name: manuallyEditedMetadataRef.current.has("name")
+          ? current.name
+          : metadata.title?.trim() || details.name,
+        tagline: manuallyEditedMetadataRef.current.has("tagline")
+          ? current.tagline
+          : metadata.tagline?.trim() || `A developer tool from ${details.domain}`,
+        description: manuallyEditedMetadataRef.current.has("description")
+          ? current.description
+          : metadata.description?.trim() || metadata.tagline?.trim() || current.tagline.trim(),
+        icon_url: metadata.iconUrl || current.icon_url || `https://www.google.com/s2/favicons?domain=${encodeURIComponent(details.domain)}&sz=128`,
+        tech_stack: manuallyEditedMetadataRef.current.has("tech_stack")
+          ? current.tech_stack
+          : metadata.techStack?.join(", ") || "",
+        pricing_type: manuallyEditedMetadataRef.current.has("pricing_type")
+          ? current.pricing_type
+          : metadata.pricingType || current.pricing_type,
       }));
-      setAutoFillMessage("Details filled from the website.");
-    } catch {
+      setAutoFillMessage("Website details fetched automatically. Review them before submitting.");
+    } catch (error) {
+      if (requestId !== metadataRequestRef.current) return;
+      console.warn("Website metadata lookup failed; using URL-based defaults.", error);
       setFormData((current) => ({
         ...current,
-        name: current.name.trim() || details.name,
-        tagline: current.tagline.trim() || `Developer tool at ${details.domain}`,
-        icon_url: current.icon_url || `https://www.google.com/s2/favicons?domain=${details.domain}&sz=128`,
+        name: manuallyEditedMetadataRef.current.has("name") ? current.name : details.name,
+        tagline: manuallyEditedMetadataRef.current.has("tagline")
+          ? current.tagline
+          : `Developer tool at ${details.domain}`,
+        description: manuallyEditedMetadataRef.current.has("description")
+          ? current.description
+          : current.tagline.trim() || `Learn more about ${details.domain}.`,
+        icon_url: current.icon_url || `https://www.google.com/s2/favicons?domain=${encodeURIComponent(details.domain)}&sz=128`,
       }));
-      setAutoFillMessage("Could not read the site directly. Added domain-based details.");
+      setAutoFillMessage("Could not read the site. Added domain-based details; please review them.");
     } finally {
-      setIsAutoFilling(false);
+      if (requestId === metadataRequestRef.current) setIsAutoFilling(false);
     }
   };
+
+  useEffect(() => {
+    if (!isOpen || !getUrlDetails(formData.website_url)) return;
+    const timer = window.setTimeout(() => {
+      void handleAutoFill(formData.website_url);
+    }, 650);
+    return () => {
+      window.clearTimeout(timer);
+      metadataRequestRef.current += 1;
+      setIsAutoFilling(false);
+    };
+  }, [formData.website_url, isOpen]);
 
   if (!isOpen) return null;
 
@@ -313,18 +366,17 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       return;
     }
 
+    const sellerContact = formData.seller_contact?.trim() ?? "";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sellerContact)) {
+      setErrorMsg("Please enter a valid email address so we can notify you when your listing is approved.");
+      return;
+    }
+
     if (formData.is_for_sale) {
       const askingPriceValid = Boolean(formData.asking_price) && Number(formData.asking_price) > 0;
-      const sellerContactValid = Boolean(formData.seller_contact?.trim());
       if (!askingPriceValid) {
         setErrorMsg(
           "Please enter a valid Asking Price for your startup listing.",
-        );
-        return;
-      }
-      if (!sellerContactValid) {
-        setErrorMsg(
-          "Please provide a seller contact email or link for potential buyers.",
         );
         return;
       }
@@ -356,7 +408,11 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       tagline: formData.tagline.trim(),
       description: formData.description.trim() || formData.tagline.trim(),
       website_url: normalizedUrl,
-      icon_url: formData.icon_url || `https://icon.horse/icon/${getUrlDetails(normalizedUrl)?.domain || ""}`,
+      icon_url: formData.icon_url || (
+        getUrlDetails(normalizedUrl)
+          ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(getUrlDetails(normalizedUrl)?.domain ?? "")}&sz=128`
+          : ""
+      ),
       category:
         formData.category === "All" ? "Developer Tools" : formData.category,
       pricing_type: formData.pricing_type,
@@ -379,10 +435,8 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       monthly_profit: formData.is_for_sale
         ? Number(formData.monthly_profit) || 0
         : 0,
-      seller_contact: formData.is_for_sale
-        ? formData.seller_contact?.trim()
-        : undefined,
-      tech_stack: formData.is_for_sale ? parsedTechStack : undefined,
+      seller_contact: sellerContact,
+      tech_stack: parsedTechStack,
     };
 
     const handleDirectSubmit = async () => {
@@ -451,10 +505,12 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
             tool_slug: getToolSlug(baseTool),
             website_url: baseTool.website_url,
             customer_email: formData.customer_email?.trim() || "",
+            seller_contact: baseTool.seller_contact || "",
             category: baseTool.category,
             pricing_type: baseTool.pricing_type,
             tagline: baseTool.tagline,
             description: baseTool.description,
+            tech_stack: parsedTechStack.join(", "),
           },
           settings: { displayMode: "overlay" },
         });
@@ -739,29 +795,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-amber-300 mb-1">
-                      Seller Contact Email / Telegram *
-                    </label>
-                    <div className="relative">
-                      <Mail className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-zinc-500" />
-                      <input
-                        type="text"
-                        value={formData.seller_contact}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            seller_contact: e.target.value,
-                          })
-                        }
-                        placeholder="founder@mystartup.com or @telegram_handle"
-                        required={formData.is_for_sale}
-                        className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-950 text-white text-xs border border-amber-500/40 focus:border-amber-500 outline-none transition"
-                      />
-                    </div>
-                  </div>
-
+                <div className="grid grid-cols-1 gap-3">
                   <div>
                     <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
                       Tech Stack Tags (Comma separated)
@@ -771,12 +805,13 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                       <input
                         type="text"
                         value={formData.tech_stack}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          manuallyEditedMetadataRef.current.add("tech_stack");
                           setFormData({
                             ...formData,
                             tech_stack: e.target.value,
-                          })
-                        }
+                          });
+                        }}
                         placeholder="Next.js 15, Supabase, Tailwind, Stripe, Python"
                         className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-950 text-white text-xs border border-zinc-700 focus:border-amber-500 outline-none transition"
                       />
@@ -796,9 +831,10 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
+                onChange={(e) => {
+                  manuallyEditedMetadataRef.current.add("name");
+                  setFormData({ ...formData, name: e.target.value });
+                }}
                 placeholder="e.g. SupaSearch AI"
                 required
                 className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition"
@@ -812,9 +848,10 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               <input
                 type="text"
                 value={formData.tagline}
-                onChange={(e) =>
-                  setFormData({ ...formData, tagline: e.target.value })
-                }
+                onChange={(e) => {
+                  manuallyEditedMetadataRef.current.add("tagline");
+                  setFormData({ ...formData, tagline: e.target.value });
+                }}
                 placeholder="e.g. Ultra-fast semantic vector search for Postgres databases"
                 required
                 className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition"
@@ -867,6 +904,29 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               </div>
             </div>
 
+            <div>
+              <label className="block text-xs font-medium text-zinc-300 mb-1">
+                Submitter Email (approval notification) *
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={formData.seller_contact}
+                  onChange={(e) =>
+                    setFormData({ ...formData, seller_contact: e.target.value })
+                  }
+                  placeholder="founder@startup.com"
+                  required
+                  className="w-full py-2.5 pl-10 pr-3.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition"
+                />
+              </div>
+              <p className="mt-1 text-[10px] text-zinc-500">
+                We’ll email you when the listing is approved. This is also your marketplace contact if you list for sale.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-zinc-300 mb-1">
@@ -874,12 +934,13 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
                 </label>
                 <select
                   value={formData.pricing_type}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    manuallyEditedMetadataRef.current.add("pricing_type");
                     setFormData({
                       ...formData,
                       pricing_type: e.target.value as PricingType,
-                    })
-                  }
+                    });
+                  }}
                   className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition cursor-pointer"
                 >
                   <option value="Free">Free</option>
@@ -918,9 +979,10 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
               <textarea
                 rows={2}
                 value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
+                onChange={(e) => {
+                  manuallyEditedMetadataRef.current.add("description");
+                  setFormData({ ...formData, description: e.target.value });
+                }}
                 placeholder="Explain the product, user growth, architecture, and reason for selling (if applicable)..."
                 className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-900 text-white text-sm border border-zinc-800 focus:border-amber-500 outline-none transition resize-none"
               />
