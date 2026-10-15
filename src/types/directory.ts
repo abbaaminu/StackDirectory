@@ -41,6 +41,8 @@ export interface Tool {
   is_approved: boolean;
   is_featured: boolean;
   status?: "pending" | "approved" | "rejected";
+  /** Canonical `?tool=` slug when the API supplies one (see lib/toolSlug.ts). */
+  slug?: string;
   paddle_customer_id?: string | null;
   created_at: string;
   user_has_upvoted?: boolean;

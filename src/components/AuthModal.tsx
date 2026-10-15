@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import supabase, { isSupabaseConfigured } from "../lib/supabase";
+import { isValidEmail } from "../lib/validation";
 import { useModalDismiss } from "../lib/useModalDismiss";
 
 export type AuthMode = "login" | "signup";
@@ -59,7 +60,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setError("Please fill in both email and password.");
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+    if (!isValidEmail(trimmedEmail)) {
       setError("Please enter a valid email address.");
       return;
     }

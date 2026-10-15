@@ -23,6 +23,7 @@ import {
 } from "../lib/paddleCheckout";
 import { getToolSlug } from "../lib/toolSlug";
 import { getFaviconUrl } from "../lib/toolDisplay";
+import { isValidEmail } from "../lib/validation";
 import { useModalDismiss } from "../lib/useModalDismiss";
 
 interface SubmitModalProps {
@@ -368,7 +369,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
     }
 
     const sellerContact = formData.seller_contact?.trim() ?? "";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sellerContact)) {
+    if (!isValidEmail(sellerContact)) {
       setErrorMsg("Please enter a valid email address so we can notify you when your listing is approved.");
       return;
     }

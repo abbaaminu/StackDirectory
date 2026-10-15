@@ -26,6 +26,22 @@ interface PaddleWebhookSimulatorProps {
   selectedToolId?: string;
 }
 
+/** Event types this simulator can dispatch. */
+type SimulatedEventType = "transaction.completed" | "transaction.created";
+
+/** Shape of the fake response the simulator renders back to the operator. */
+type SimulatedWebhookResponse = {
+  status: number;
+  statusText: string;
+  data: {
+    success?: boolean;
+    message: string;
+    received?: boolean;
+    tool_id?: string;
+    db_updates?: Record<string, unknown>;
+  };
+};
+
 export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
   isOpen,
   onClose,
@@ -39,12 +55,13 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
       tools[0]?.id ||
       "",
   );
-  const [eventType, setEventType] = useState<
-    "transaction.completed" | "transaction.created"
-  >("transaction.completed");
+  const [eventType, setEventType] = useState<SimulatedEventType>(
+    "transaction.completed",
+  );
   const [amount, setAmount] = useState("5.00");
   const [isSimulating, setIsSimulating] = useState(false);
-  const [webhookResponse, setWebhookResponse] = useState<any | null>(null);
+  const [webhookResponse, setWebhookResponse] =
+    useState<SimulatedWebhookResponse | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Escape closes the simulator and the page behind it stops scrolling.
@@ -151,7 +168,7 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
             >
               Paddle Webhook Simulator
               <span className="text-[11px] font-mono font-normal px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                POST /api/webhooks/paddle
+                POST /api/paddle-webhook
               </span>
             </h2>
             <p className="text-xs text-zinc-400 mt-0.5">
@@ -191,7 +208,7 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
             </label>
             <select
               value={eventType}
-              onChange={(e) => setEventType(e.target.value as any)}
+              onChange={(e) => setEventType(e.target.value as SimulatedEventType)}
               className="w-full px-3 py-2 rounded-lg bg-zinc-950 text-xs text-zinc-200 border border-zinc-700 focus:border-amber-500 outline-none cursor-pointer"
             >
               <option value="transaction.completed">
@@ -265,7 +282,7 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
           <div className="mt-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs">
             <div className="flex items-center gap-2 text-emerald-400 font-bold mb-1">
               <CheckCircle2 className="w-4 h-4" />
-              <span>HTTP 200 Response from /api/webhooks/paddle</span>
+              <span>HTTP 200 Response from /api/paddle-webhook</span>
             </div>
             <pre className="font-mono text-[11px] text-emerald-200 mt-2 bg-black/40 p-2.5 rounded-lg overflow-x-auto">
               {JSON.stringify(webhookResponse.data, null, 2)}

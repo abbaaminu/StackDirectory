@@ -21,6 +21,7 @@ import {
 import { getToolSlug } from "../lib/toolSlug";
 import { getSafeWebsiteUrl } from "../lib/toolDisplay";
 import { readJsonArray, STORAGE_KEYS, writeJsonArray } from "../lib/localStore";
+import { getAccessToken } from "../lib/session";
 import { useModalDismiss } from "../lib/useModalDismiss";
 
 interface AdminQueueModalProps {
@@ -112,26 +113,36 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
   const notifySubmitter = (tool: Tool | undefined) => {
     const submitterEmail = tool?.seller_contact?.trim();
     if (!tool || !submitterEmail) return;
-    void fetch("/api/send-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "APP_APPROVED",
-        toolName: tool.name,
-        submitterEmail,
-        toolSlug: getToolSlug(tool),
-      }),
-    }).catch((notificationError) => {
-      console.error("Approval notification failed:", notificationError);
-    });
+    // `APP_APPROVED` requires an authenticated administrator (see
+    // api/send-email.ts), so the caller's token travels with the request. The
+    // mail is best-effort: the listing is already approved at this point.
+    void getAccessToken()
+      .then((token) =>
+        fetch("/api/send-email", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            type: "APP_APPROVED",
+            toolName: tool.name,
+            submitterEmail,
+            toolSlug: getToolSlug(tool),
+          }),
+        }),
+      )
+      .then((response) => {
+        if (!response.ok) {
+          console.warn("Approval notification was rejected:", response.status);
+        }
+      })
+      .catch((notificationError) => {
+        console.error("Approval notification failed:", notificationError);
+      });
   };
 
-  /** Access token for /api/admin-tools (null without a Supabase session). */
-  const getAccessToken = async (): Promise<string | null> => {
-    if (!isSupabaseConfigured || !supabase) return null;
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? null;
-  };
+  /** Access token for /api/admin-tools (see lib/session.ts). */
 
   /**
    * Last-resort direct write with the anon key. PostgREST reports a write that

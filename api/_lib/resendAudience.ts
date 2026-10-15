@@ -1,6 +1,5 @@
 import { Resend } from "resend";
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { isValidEmail } from "./email";
 
 /** Adds a contact to the configured Audience, updating it when it already exists. */
 export async function syncResendAudienceContact(
@@ -17,7 +16,7 @@ export async function syncResendAudienceContact(
     console.warn("Failed to sync contact to Resend Audience: RESEND_API_KEY is not configured.");
     return false;
   }
-  if (!EMAIL_PATTERN.test(email)) {
+  if (!isValidEmail(email)) {
     console.warn("Failed to sync contact to Resend Audience: submitter email is invalid.");
     return false;
   }

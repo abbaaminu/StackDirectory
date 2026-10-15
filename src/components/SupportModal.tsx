@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Check, Clipboard, LoaderCircle, Mail, X } from "lucide-react";
+import { isValidEmail } from "../lib/validation";
 import { useModalDismiss } from "../lib/useModalDismiss";
 
 const SUPPORT_EMAIL = "support@stackbuildco.com";
@@ -37,6 +38,13 @@ export const SupportModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
     setFormError("");
     if (!senderName.trim() || !senderEmail.trim() || !message.trim()) {
       setFormError("Please complete your name, email, and message.");
+      return;
+    }
+    // The endpoint rejects a malformed sender address anyway (see
+    // api/send-email.ts); catching it here means the visitor still has their
+    // message in the box instead of losing it to a failed request.
+    if (!isValidEmail(senderEmail)) {
+      setFormError("Please enter a valid email address so we can reply.");
       return;
     }
 

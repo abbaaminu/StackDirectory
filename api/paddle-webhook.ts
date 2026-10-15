@@ -188,6 +188,18 @@ export function hasProcessedEvent(key: string): boolean {
 }
 
 /**
+ * Forgets an event key so the next delivery may retry it.
+ *
+ * The key is recorded *before* the database work, and Paddle only retries a
+ * delivery that did **not** get a 2xx. So a transient Supabase failure had to
+ * release the key again: otherwise Paddle's retry was answered
+ * `duplicate: true` and the paying customer's listing was never featured.
+ */
+function forgetProcessedEvent(key: string): void {
+  PROCESSED_EVENTS.delete(key);
+}
+
+/**
  * The Paddle price id that buys a Featured Listing.
  *
  * `PADDLE_FEATURED_PRICE_ID` is the documented server-side name; the public
@@ -548,7 +560,8 @@ export default async function handler(
     }
 
     // 5b. Acknowledge replays without re-running the side effects below.
-    if (!rememberProcessedEvent(`${transactionId}:${matchingValue}`)) {
+    const processedEventKey = `${transactionId}:${matchingValue}`;
+    if (!rememberProcessedEvent(processedEventKey)) {
       console.warn(
         `[Paddle Webhook] Duplicate delivery for transaction ${transactionId} (listing ${matchingValue}) - acknowledged without re-upgrading.`,
       );
@@ -602,6 +615,10 @@ export default async function handler(
 
     if (error) {
       console.error("[Paddle Webhook] Database update failed:", error.message);
+      // The upgrade did not happen and this response is a 500, so Paddle will
+      // retry: release the replay guard or that retry would be acknowledged as
+      // a duplicate and the paid Featured slot would be lost for good.
+      forgetProcessedEvent(processedEventKey);
       res.statusCode = 500;
       res.setHeader("Content-Type", "application/json");
       res.end(
@@ -676,6 +693,9 @@ export default async function handler(
           }
         } else {
           console.error("[Paddle Webhook] Failed to create the paid listing:", insertError.message);
+          // Same reason as the update path: a 500 means Paddle retries, and the
+          // retry must be allowed to try the insert again.
+          forgetProcessedEvent(processedEventKey);
           res.statusCode = 500;
           res.setHeader("Content-Type", "application/json");
           res.end(

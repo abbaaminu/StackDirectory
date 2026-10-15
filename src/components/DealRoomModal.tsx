@@ -4,7 +4,12 @@ import type { Tool } from "../types/directory";
 import supabase, { isSupabaseConfigured } from "../lib/supabase";
 import { sanitizeDealMessage } from "../lib/redact";
 import { getToolSlug } from "../lib/toolSlug";
-import { readJsonArray, STORAGE_KEYS } from "../lib/localStore";
+import {
+  readJsonArray,
+  STORAGE_KEYS,
+  writeJsonArray,
+} from "../lib/localStore";
+import { authorizationHeader } from "../lib/session";
 import { useModalDismiss } from "../lib/useModalDismiss";
 
 interface DealConversation {
@@ -44,9 +49,12 @@ const LOCAL_CONVERSATIONS = STORAGE_KEYS.dealConversations;
 const LOCAL_MESSAGES = STORAGE_KEYS.dealMessages;
 const LOCAL_OFFERS = STORAGE_KEYS.acquisitionOffers;
 
-/** Defensive JSON-array reader (see lib/localStore.ts). */
-const readLocal = readJsonArray;
-
+/**
+ * Local (offline/demo) persistence goes through the defensive helpers in
+ * `lib/localStore.ts`: a raw `localStorage.setItem` throws in private mode or on
+ * a full quota, which would reject inside one of the async loaders below and
+ * leave the deal room stuck on its loading state.
+ */
 export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, tool, userId }) => {
   const [conversation, setConversation] = useState<DealConversation | null>(null);
   const [messages, setMessages] = useState<DealMessage[]>([]);
@@ -83,7 +91,7 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
       setIsLoading(true);
       setError(null);
       if (!isSupabaseConfigured || !supabase) {
-        const localConversation = readLocal<DealConversation>(LOCAL_CONVERSATIONS).find(
+        const localConversation = readJsonArray<DealConversation>(LOCAL_CONVERSATIONS).find(
           (item) => item.tool_id === tool.id && item.buyer_id === userId,
         );
         const activeConversation = localConversation || {
@@ -94,14 +102,23 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
           nda_signed: false,
         };
         if (!localConversation) {
-          localStorage.setItem(LOCAL_CONVERSATIONS, JSON.stringify([
-            ...readLocal<DealConversation>(LOCAL_CONVERSATIONS), activeConversation,
-          ]));
+          writeJsonArray(LOCAL_CONVERSATIONS, [
+            ...readJsonArray<DealConversation>(LOCAL_CONVERSATIONS),
+            activeConversation,
+          ]);
         }
         if (!cancelled) {
           setConversation(activeConversation);
-          setMessages(readLocal<DealMessage>(LOCAL_MESSAGES).filter((item) => item.conversation_id === activeConversation.id));
-          setOffers(readLocal<AcquisitionOffer>(LOCAL_OFFERS).filter((item) => item.tool_id === tool.id && item.buyer_id === userId));
+          setMessages(readJsonArray<DealMessage>(LOCAL_MESSAGES).filter((item) => item.conversation_id === activeConversation.id));
+          // Offers written before this modal started storing `buyer_id` still
+          // belong to this device, so they are listed too instead of vanishing.
+          setOffers(
+            readJsonArray<AcquisitionOffer>(LOCAL_OFFERS).filter(
+              (item) =>
+                item.tool_id === tool.id &&
+                (item.buyer_id === userId || !item.buyer_id),
+            ),
+          );
           setIsLoading(false);
         }
         return;
@@ -178,8 +195,8 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
     setIsSigning(true);
     if (!isSupabaseConfigured || !supabase) {
       const next = { ...conversation, nda_signed: true };
-      const all = readLocal<DealConversation>(LOCAL_CONVERSATIONS).map((item) => item.id === next.id ? next : item);
-      localStorage.setItem(LOCAL_CONVERSATIONS, JSON.stringify(all));
+      const all = readJsonArray<DealConversation>(LOCAL_CONVERSATIONS).map((item) => item.id === next.id ? next : item);
+      writeJsonArray(LOCAL_CONVERSATIONS, all);
       setConversation(next);
       setIsSigning(false);
       return;
@@ -199,7 +216,10 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
     const message = { conversation_id: conversation.id, sender_id: userId, message_text: sanitizedText };
     if (!isSupabaseConfigured || !supabase) {
       const localMessage: DealMessage = { ...message, id: `message_${Date.now()}`, created_at: new Date().toISOString() };
-      localStorage.setItem(LOCAL_MESSAGES, JSON.stringify([...readLocal<DealMessage>(LOCAL_MESSAGES), localMessage]));
+      writeJsonArray(LOCAL_MESSAGES, [
+        ...readJsonArray<DealMessage>(LOCAL_MESSAGES),
+        localMessage,
+      ]);
       setMessages((current) => [...current, localMessage]);
       setDraft("");
       setIsSubmitting(false);
@@ -239,8 +259,8 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
           status: "pending",
           created_at: new Date().toISOString(),
         };
-        const localOffers = [...readLocal<AcquisitionOffer>(LOCAL_OFFERS), localOffer];
-        localStorage.setItem(LOCAL_OFFERS, JSON.stringify(localOffers));
+        const localOffers = [...readJsonArray<AcquisitionOffer>(LOCAL_OFFERS), localOffer];
+        writeJsonArray(LOCAL_OFFERS, localOffers);
         const localMessage: DealMessage = {
           id: `message_${Date.now()}`,
           conversation_id: conversation.id,
@@ -248,7 +268,10 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
           message_text: formattedMessage,
           created_at: new Date().toISOString(),
         };
-        localStorage.setItem(LOCAL_MESSAGES, JSON.stringify([...readLocal<DealMessage>(LOCAL_MESSAGES), localMessage]));
+        writeJsonArray(LOCAL_MESSAGES, [
+          ...readJsonArray<DealMessage>(LOCAL_MESSAGES),
+          localMessage,
+        ]);
         setOffers((current) => [localOffer, ...current]);
         setMessages((current) => [...current, localMessage]);
       } else {
@@ -285,20 +308,32 @@ export const DealRoomModal: React.FC<DealRoomModalProps> = ({ isOpen, onClose, t
       }
       const ownerEmail = tool.seller_contact?.trim();
       if (ownerEmail) {
-        void fetch("/api/send-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "NEW_OFFER",
-            toolName: tool.name,
-            ownerEmail,
-            offerAmount: amount,
-            message: messageText,
-            toolSlug: getToolSlug(tool),
-          }),
-        }).catch((notificationError) => {
-          console.error("Offer notification failed:", notificationError);
-        });
+        // `NEW_OFFER` needs the caller's session (see api/send-email.ts: without
+        // it the endpoint is an open mail relay), and the notification stays
+        // best-effort - the offer itself is already recorded by now.
+        void authorizationHeader()
+          .then((headers) =>
+            fetch("/api/send-email", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...headers },
+              body: JSON.stringify({
+                type: "NEW_OFFER",
+                toolName: tool.name,
+                ownerEmail,
+                offerAmount: amount,
+                message: messageText,
+                toolSlug: getToolSlug(tool),
+              }),
+            }),
+          )
+          .then((response) => {
+            if (!response.ok) {
+              console.warn("Offer notification was rejected:", response.status);
+            }
+          })
+          .catch((notificationError) => {
+            console.error("Offer notification failed:", notificationError);
+          });
       }
       setOfferAmount("");
       setOfferMessage("");

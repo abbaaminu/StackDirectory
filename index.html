@@ -60,8 +60,10 @@
     />
     <meta name="twitter:url" content="https://apps.stackbuildco.com/" />
 
-    <!-- Paddle.js V2 SDK -->
-    <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+    <!-- Paddle.js V2 SDK. `defer` keeps this third-party script from blocking the
+         first paint; the app only touches `window.Paddle` when a visitor opens a
+         paid checkout, and it already reports a missing SDK inline. -->
+    <script defer src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 
     <!-- JSON-LD Structured Data (Schema.org: WebSite, Organization & SoftwareApplication) -->
     <script type="application/ld+json">

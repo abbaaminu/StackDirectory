@@ -8,7 +8,15 @@ import {
 } from "lucide-react";
 import { Tool } from "../types/directory";
 import { handleVisitWebsite } from "../lib/trackToolClick";
-import { getFaviconUrl, getPricingBadgeColor, getSafeWebsiteUrl } from "../lib/toolDisplay";
+import {
+  getFaviconUrl,
+  getPricingBadgeColor,
+  getSafeWebsiteUrl,
+  initialToolImageSource,
+  nextToolImageSource,
+  resolveToolImageSrc,
+  type ToolImageSource,
+} from "../lib/toolDisplay";
 import { FeaturedBadgeIcon } from "./icons/FeaturedBadgeIcon";
 
 interface ToolCardProps {
@@ -36,13 +44,14 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   const customIconUrl = getSafeWebsiteUrl(tool.icon_url);
   const hasCustomIcon = Boolean(customIconUrl);
   const faviconUrl = getFaviconUrl(tool.website_url);
-  const [logoSource, setLogoSource] = useState<"custom" | "favicon" | "initial">(
-    hasCustomIcon ? "custom" : faviconUrl ? "favicon" : "initial",
+  const [logoSource, setLogoSource] = useState<ToolImageSource>(() =>
+    initialToolImageSource(hasCustomIcon, Boolean(faviconUrl)),
   );
-  const logoSrc = logoSource === "custom" ? customIconUrl : faviconUrl;
+  // `null` means "render the letter avatar": the source chain is exhausted.
+  const logoSrc = resolveToolImageSrc(logoSource, customIconUrl, faviconUrl);
 
   useEffect(() => {
-    setLogoSource(hasCustomIcon ? "custom" : faviconUrl ? "favicon" : "initial");
+    setLogoSource(initialToolImageSource(hasCustomIcon, Boolean(faviconUrl)));
   }, [tool.id, customIconUrl, faviconUrl, hasCustomIcon]);
 
   const handleUpvote = (e: React.MouseEvent) => {
@@ -109,13 +118,22 @@ export const ToolCard: React.FC<ToolCardProps> = ({
         <div className="flex items-start gap-2.5">
           {/* Circular brand favicon */}
           <div className="relative w-9 h-9 rounded-full border border-slate-100 overflow-hidden shrink-0 flex items-center justify-center bg-linear-to-tr from-amber-500 via-orange-500 to-amber-400">
-            {logoSource !== "initial" ? (
+            {logoSrc ? (
               <img
-                src={logoSrc || undefined}
+                src={logoSrc}
                 alt={`${tool.name} logo`}
                 loading="lazy"
                 referrerPolicy="no-referrer"
-                onError={() => setLogoSource((current) => current === "custom" && faviconUrl ? "favicon" : "initial")}
+                // A broken icon advances one step down the source chain
+                // (custom -> favicon -> hard-coded fallback -> initials avatar)
+                // and never jumps back, so a dead fallback URL cannot loop.
+                onError={(event) => {
+                  const image = event.currentTarget as HTMLImageElement;
+                  console.warn(
+                    `[ToolCard] Logo failed to load for listing ${tool.id}: ${image.currentSrc || image.src}`,
+                  );
+                  setLogoSource((current) => nextToolImageSource(current));
+                }}
                 className="w-full h-full object-cover"
               />
             ) : (
@@ -126,26 +144,49 @@ export const ToolCard: React.FC<ToolCardProps> = ({
           </div>
 
           <div className="min-w-0">
-            <a
-              href={websiteUrl ?? undefined}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleVisitWebsite(tool);
-              }}
-              className="text-base text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer transition-colors truncate block"
-              title={websiteUrl ? `Visit ${websiteUrl}` : tool.name}
-            >
-              {tool.name}
-            </a>
-            {/* Star rating */}
-            <div className="flex items-center gap-1 mt-0.5">
-              <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-              <span className="text-xs font-semibold text-slate-700">
-                {tool.rating ?? "4.5"}
+            {websiteUrl ? (
+              <a
+                href={websiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleVisitWebsite(tool);
+                }}
+                className="text-base text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer transition-colors truncate block"
+                title={`Visit ${websiteUrl}`}
+              >
+                {tool.name}
+              </a>
+            ) : (
+              /*
+                A submission can carry an unusable URL (blank, or a scheme this
+                card refuses to navigate to). It used to render an `<a>` without
+                an `href`: still styled as a link, still showing a click cursor,
+                but doing nothing. Plain text with the reason in `title` matches
+                how ToolDetailModal reports the same case.
+              */
+              <span
+                className="text-base font-bold text-slate-900 truncate block"
+                title="Website unavailable"
+              >
+                {tool.name}
               </span>
-            </div>
+            )}
+            {/*
+              Star rating, rendered only when the listing carries one.
+              The previous `tool.rating ?? "4.5"` fallback showed a fabricated
+              4.5-star rating on every row - including every Supabase listing,
+              since `public.tools` has no rating column at all.
+            */}
+            {typeof tool.rating === "number" && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                <span className="text-xs font-semibold text-slate-700">
+                  {tool.rating}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

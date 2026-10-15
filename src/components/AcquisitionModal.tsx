@@ -14,6 +14,8 @@ import {
 import { Tool } from "../types/directory";
 import supabase, { isSupabaseConfigured } from "../lib/supabase";
 import { readJsonArray, STORAGE_KEYS, writeJsonArray } from "../lib/localStore";
+import { buildLocalAcquisitionOffer } from "../lib/acquisition";
+import { isValidEmail } from "../lib/validation";
 import { useModalDismiss } from "../lib/useModalDismiss";
 
 interface AcquisitionModalProps {
@@ -21,6 +23,11 @@ interface AcquisitionModalProps {
   onClose: () => void;
   tool: Tool | null;
   onOpenDealRoom?: (tool: Tool) => void;
+  /**
+   * Buyer identity for the offline record. The deal room lists a device's offers
+   * by `buyer_id` (see DealRoomModal), so the same value must be written here.
+   */
+  userId?: string;
 }
 
 export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
@@ -28,6 +35,7 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
   onClose,
   tool,
   onOpenDealRoom,
+  userId = "local-demo-user",
 }) => {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
@@ -57,6 +65,10 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
       setErrorMsg("Please provide your email.");
       return;
     }
+    if (!isValidEmail(buyerEmail)) {
+      setErrorMsg("Please provide a valid email address.");
+      return;
+    }
     const amount = parseFloat(offerAmount);
     if (isNaN(amount) || amount <= 0) {
       setErrorMsg("Please enter a valid offer amount in USD.");
@@ -84,10 +96,24 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
         }
       } else {
         const existing = readJsonArray<unknown>(STORAGE_KEYS.acquisitionOffers);
-        writeJsonArray(STORAGE_KEYS.acquisitionOffers, [
+        // The shared builder records `buyer_id`, which is what the deal room
+        // filters a device's offers by (see lib/acquisition.ts).
+        const persisted = writeJsonArray(STORAGE_KEYS.acquisitionOffers, [
           ...existing,
-          { tool_id: tool.id, buyer_name: buyerName.trim(), buyer_email: buyerEmail.trim(), offer_amount: amount, message: message.trim(), status: "pending", created_at: new Date().toISOString() },
+          buildLocalAcquisitionOffer({
+            toolId: tool.id,
+            userId,
+            buyerName,
+            buyerEmail,
+            offerAmount: amount,
+            message,
+          }),
         ]);
+        if (!persisted) {
+          setErrorMsg("This browser could not store your offer. Please try again or email support@stackbuildco.com.");
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       setIsSubmitting(false);

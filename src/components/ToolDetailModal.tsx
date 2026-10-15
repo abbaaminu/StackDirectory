@@ -2,7 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Check, ChevronUp, Copy, ExternalLink, Handshake, Heart, Share2, Trash2, X } from "lucide-react";
 import type { Tool } from "../types/directory";
 import { handleVisitWebsite } from "../lib/trackToolClick";
-import { getFaviconUrl, getSafeHostname, getSafeWebsiteUrl } from "../lib/toolDisplay";
+import { getFaviconUrl, getSafeHostname, getSafeWebsiteUrl, initialToolImageSource, nextToolImageSource, resolveToolImageSrc, type ToolImageSource } from "../lib/toolDisplay";
+import { applyToolOgMetadata, buildToolOgMetadata } from "../lib/toolOgMetadata";
 import { getToolSlug } from "../lib/toolSlug";
 import { useModalDismiss } from "../lib/useModalDismiss";
 
@@ -27,8 +28,20 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
   isAdmin = false,
   onAdminDelete,
 }) => {
-  const [logoSource, setLogoSource] = useState("");
-  const [logoFailed, setLogoFailed] = useState(false);
+  // Sanitised once for the state, the reset effect and the render below:
+  // `icon_url`/`website_url` are user-supplied, so neither may reach `src`
+  // unchecked, and a bare host entered in the submit form still needs a favicon.
+  const toolIconUrl = getSafeWebsiteUrl(tool?.icon_url);
+  const toolFaviconUrl = getFaviconUrl(tool?.website_url);
+  const hasToolIcon = Boolean(toolIconUrl);
+  // Ordered logo chain: custom icon -> Google favicon -> hard-coded fallback ->
+  // letter avatar. `logoFailed` used to be a second source of truth; it is now
+  // derived from the chain position, so the two cannot disagree. The lazy
+  // initialiser means the first paint (and SSR) already shows the real logo
+  // rather than flashing the avatar.
+  const [logoSource, setLogoSource] = useState<ToolImageSource>(() =>
+    initialToolImageSource(hasToolIcon, Boolean(toolFaviconUrl)),
+  );
   const [isCopied, setIsCopied] = useState(false);
   const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
   const [shareNotice, setShareNotice] = useState("");
@@ -40,13 +53,9 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
 
   useEffect(() => {
     if (tool) {
-      // `icon_url` and `website_url` are user-supplied: both are sanitised
-      // before they can reach `src`, so a `javascript:`/`data:` value cannot
-      // execute, and a broken icon falls back to the favicon service.
-      const customIcon = getSafeWebsiteUrl(tool.icon_url);
-      const favicon = getFaviconUrl(tool.website_url);
-      setLogoSource(customIcon || favicon || "");
-      setLogoFailed(!customIcon && !favicon);
+      // A different listing gets a fresh chain; the stored values were already
+      // sanitised above, so a `javascript:`/`data:` icon can never be a source.
+      setLogoSource(initialToolImageSource(hasToolIcon, Boolean(toolFaviconUrl)));
       setIsCopied(false);
       setIsShareMenuOpen(false);
       setShareNotice("");
@@ -55,44 +64,38 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
     }
   }, [tool]);
 
-  const toolSlug = tool ? (tool as Tool & { slug?: string }).slug || getToolSlug(tool) : "";
+  const toolSlug = tool ? tool.slug || getToolSlug(tool) : "";
   const shareUrl = `https://apps.stackbuildco.com/?tool=${encodeURIComponent(toolSlug)}`;
   const ogImageUrl = tool
     ? `https://apps.stackbuildco.com/api/og?title=${encodeURIComponent(tool.name)}&tagline=${encodeURIComponent(tool.tagline)}&category=${encodeURIComponent(tool.category)}&pricing=${encodeURIComponent(tool.pricing_type)}`
     : "";
 
+  // The listing's own preview cards stay in the head while it is open, then the
+  // site's defaults come back - closing a modal must not delete the tags
+  // index.html shipped with (see lib/toolOgMetadata.ts).
   useEffect(() => {
     if (!isOpen || !tool) return;
 
-    const metadata = [
-      ["property", "og:title", tool.name],
-      ["property", "og:description", tool.tagline],
-      ["property", "og:image", ogImageUrl],
-      ["property", "og:url", shareUrl],
-      ["name", "twitter:card", "summary_large_image"],
-      ["name", "twitter:title", tool.name],
-      ["name", "twitter:description", tool.tagline],
-      ["name", "twitter:image", ogImageUrl],
-    ] as const;
-
-    const elements = metadata.map(([attribute, key, content]) => {
-      const element = document.head.querySelector(`meta[${attribute}="${key}"]`) || document.createElement("meta");
-      element.setAttribute(attribute, key);
-      element.setAttribute("content", content);
-      if (!element.parentNode) document.head.appendChild(element);
-      return element;
-    });
-
-    return () => {
-      elements.forEach((element) => element.remove());
-    };
+    // `HTMLMetaElement` is spelled out because the DOM's overloaded
+    // `createElement` does not let TypeScript infer which element the head
+    // owner produces - see the `HeadOwnerLike` doc comment.
+    return applyToolOgMetadata<HTMLMetaElement>(
+      document,
+      buildToolOgMetadata({
+        name: tool.name,
+        tagline: tool.tagline,
+        imageUrl: ogImageUrl,
+        shareUrl,
+      }),
+    );
   }, [isOpen, ogImageUrl, shareUrl, tool]);
 
   if (!isOpen || !tool) return null;
 
   const websiteUrl = getSafeWebsiteUrl(tool.website_url);
   const hostname = getSafeHostname(tool.website_url) ?? "";
-  const fallback = getFaviconUrl(tool.website_url) ?? "";
+  // `null` once the chain is exhausted, which renders the letter avatar.
+  const logoSrc = resolveToolImageSrc(logoSource, toolIconUrl, toolFaviconUrl);
   const shareTitle = `${tool.name} - StackDirectory`;
   const shareText = `Check out ${tool.name} on StackDirectory!`;
 
@@ -173,21 +176,26 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
 
         <div className="flex items-start gap-4 pr-8">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-emerald-50 text-xl font-black text-emerald-700">
-            {logoFailed ? (
+            {logoSrc ? (
+              <img
+                src={logoSrc}
+                alt={`${tool.name} logo`}
+                className="h-full w-full object-cover"
+                // Advances down the shared source chain and stops at the avatar,
+                // so a dead icon (or a dead fallback URL) cannot loop.
+                onError={(event) => {
+                  const image = event.currentTarget as HTMLImageElement;
+                  console.warn(
+                    `[ToolDetailModal] Logo failed to load for listing ${tool.id}: ${image.currentSrc || image.src}`,
+                  );
+                  setLogoSource((current) => nextToolImageSource(current));
+                }}
+              />
+            ) : (
               <svg viewBox="0 0 40 40" aria-label={`${tool.name} initial avatar`} className="h-full w-full">
                 <rect width="40" height="40" rx="20" fill="#d1fae5" />
                 <text x="20" y="25" textAnchor="middle" fontSize="16" fontWeight="700" fill="#047857">{tool.name.slice(0, 1).toUpperCase()}</text>
               </svg>
-            ) : (
-              <img
-                src={logoSource || undefined}
-                alt={`${tool.name} logo`}
-                className="h-full w-full object-cover"
-                onError={() => {
-                  if (fallback && logoSource !== fallback) setLogoSource(fallback);
-                  else setLogoFailed(true);
-                }}
-              />
             )}
           </div>
           <div className="min-w-0">

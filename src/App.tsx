@@ -49,7 +49,7 @@ type ViewMode = "all" | "for_sale";
 const getToolFromUrl = (toolParam: string, availableTools: Tool[]): Tool | null => {
   const normalizedParam = toolParam.toLowerCase();
   return availableTools.find((tool) =>
-    ((tool as Tool & { slug?: string }).slug?.toLowerCase() === normalizedParam) ||
+    (tool.slug?.toLowerCase() === normalizedParam) ||
       getToolSlug(tool) === normalizedParam ||
       tool.id.toLowerCase() === normalizedParam,
   ) ?? null;
@@ -103,7 +103,12 @@ export default function App() {
 
   const closeToolDetails = () => {
     setSelectedDetailTool(null);
-    window.history.pushState({}, "", window.location.pathname);
+    // `replaceState`, not `pushState`: opening a listing already pushed its own
+    // history entry, so pushing another one here left the visitor with
+    // [.., ?tool=x, /] - pressing Back immediately reopened the modal they had
+    // just closed. Replacing the entry drops the deep link without trapping them
+    // in a Back loop.
+    window.history.replaceState({}, "", window.location.pathname);
   };
 
   useEffect(() => {
@@ -206,9 +211,15 @@ export default function App() {
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
     void supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
-      if (nextSession) showToast("Authentication state updated.");
+      // Supabase also emits `INITIAL_SESSION` on every page load and
+      // `TOKEN_REFRESHED` roughly hourly, so toasting on *any* session would
+      // greet a returning visitor with "Authentication state updated." before
+      // they touched anything. Only a real sign-in is worth announcing.
+      if (event === "SIGNED_IN" && nextSession) {
+        showToast("Authentication state updated.");
+      }
     });
     return () => data.subscription.unsubscribe();
   }, [showToast]);
@@ -450,7 +461,7 @@ export default function App() {
   const handleToggleFavorite = (toolId: string) => {
     const savedIds = readStringArray(STORAGE_KEYS.savedTools);
     const isSaving = !savedIds.includes(toolId);
-    writeStringArray(
+    const persisted = writeStringArray(
       STORAGE_KEYS.savedTools,
       isSaving ? [...savedIds, toolId] : savedIds.filter((id) => id !== toolId),
     );
@@ -460,7 +471,14 @@ export default function App() {
     setSelectedDetailTool((current) =>
       current?.id === toolId ? { ...current, is_favorite: isSaving } : current,
     );
-    showToast(isSaving ? "Saved to your favorites." : "Removed from your favorites.");
+    showToast(
+      persisted
+        ? isSaving
+          ? "Saved to your favorites."
+          : "Removed from your favorites."
+        : // Private mode / full quota: say so instead of implying it was stored.
+          "Favorites could not be saved in this browser.",
+    );
   };
 
   // Listings inside the active All Apps / For Sale tab - drives category counts
@@ -817,6 +835,9 @@ export default function App() {
         isOpen={!!selectedAcquisitionTool}
         onClose={() => setSelectedAcquisitionTool(null)}
         tool={selectedAcquisitionTool}
+        // The offline offer record is keyed by buyer, and the deal room reads it
+        // back by the same id (see src/lib/localStore.ts).
+        userId={session?.user.id ?? "local-demo-user"}
         onOpenDealRoom={(tool) => {
           setSelectedAcquisitionTool(null);
           setSelectedDealRoomTool(tool);

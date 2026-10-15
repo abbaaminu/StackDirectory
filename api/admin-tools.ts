@@ -1,6 +1,12 @@
-import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import type { IncomingMessage, ServerResponse } from "http";
+import {
+  createServiceRoleClient,
+  isAdminRecord,
+  readBearerToken,
+  type ServiceRoleClient,
+} from "./_lib/adminAuth";
+import { escapeHtml } from "./_lib/email";
 import { syncResendAudienceContact } from "./_lib/resendAudience";
 
 /**
@@ -61,11 +67,20 @@ const isAdminAction = (value: unknown): value is AdminToolAction =>
   typeof value === "string" && (ADMIN_ACTIONS as readonly string[]).includes(value);
 
 /**
+ * Actions that mutate a row's columns. `delete` and `list` are handled by their
+ * own branches in the handler, so excluding them here makes the mapping
+ * exhaustive: a new action added to `ADMIN_ACTIONS` stops compiling until it is
+ * implemented, instead of falling out of this table and being mistaken for a
+ * delete (the old `null` return meant "destroy the row").
+ */
+type UpdatableAdminAction = Exclude<AdminToolAction, "list" | "delete">;
+
+/**
  * Row changes per action. `approve`/`reject` keep `is_approved` and `status` in
  * agreement because `tools.status` is constrained to pending | approved |
  * rejected (writing anything else is rejected by the database).
  */
-function changesForAction(action: AdminToolAction): Record<string, unknown> | null {
+function changesForAction(action: UpdatableAdminAction): Record<string, unknown> {
   switch (action) {
     case "approve":
       return { is_approved: true, status: "approved" };
@@ -79,39 +94,15 @@ function changesForAction(action: AdminToolAction): Record<string, unknown> | nu
       return { is_for_sale: true };
     case "unlist":
       return { is_for_sale: false };
-    case "delete":
-      return null;
   }
 }
 
 /**
- * Server-side admin allow-list. The public `VITE_` names are accepted as well
- * so a single deployment variable can serve both runtimes.
+ * Server-side admin allow-list lives in `api/_lib/adminAuth.ts` so this route and
+ * `api/send-email.ts` can never disagree about who may moderate. `app_metadata`
+ * is server-issued and cannot be self-granted, which is why a role claim is
+ * trusted alongside the configured email list.
  */
-function getAdminEmails(): string[] {
-  return Array.from(
-    new Set(
-      [
-        ...(process.env.ADMIN_EMAILS ?? "").split(","),
-        ...(process.env.VITE_ADMIN_EMAILS ?? "").split(","),
-        process.env.ADMIN_EMAIL ?? "",
-        process.env.VITE_ADMIN_EMAIL ?? "",
-      ]
-        .map((email) => email.trim().toLowerCase())
-        .filter(Boolean),
-    ),
-  );
-}
-
-function isAdminUser(user: { email?: string | null; app_metadata?: unknown } | null): boolean {
-  if (!user) return false;
-  // `app_metadata` is server-issued and cannot be self-granted.
-  const metadata = user.app_metadata as { role?: unknown } | null | undefined;
-  if (metadata?.role === "admin") return true;
-  return Boolean(
-    user.email && getAdminEmails().includes(user.email.trim().toLowerCase()),
-  );
-}
 
 function collectBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -142,14 +133,19 @@ function respond(
   res.end(JSON.stringify(body));
 }
 
-/** Reads the bearer token from the Authorization header. */
-function readBearerToken(req: AdminRequest): string {
-  const header = req.headers.authorization;
-  const value = Array.isArray(header) ? header[0] : header;
-  if (!value) return "";
-  const match = /^Bearer\s+(.+)$/i.exec(value.trim());
-  return match ? match[1].trim() : "";
+/**
+ * `Error.message` for anything that was thrown, or "" when there is none.
+ *
+ * Used by the route's top-level catch: an unhandled lambda crash gives the admin
+ * UI nothing to show, so the thrown message is surfaced as the JSON `error`.
+ */
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) return error.message.trim();
+  if (typeof error === "string" && error.trim()) return error.trim();
+  return "";
 }
+
+/** Reads the bearer token from the Authorization header (see `_lib/adminAuth`). */
 
 /** Rows a PostgREST mutation actually touched (`.select()` echoes them). */
 function countRows(data: unknown): number {
@@ -157,15 +153,7 @@ function countRows(data: unknown): number {
   return data ? 1 : 0;
 }
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>'"]/g, (character) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "'": "&#39;",
-    '"': "&quot;",
-  })[character] ?? character);
-}
+/** HTML-escapes listing names in the approval mail (see `_lib/email`). */
 
 async function sendApprovalNotification(tool: {
   id: string;
@@ -210,12 +198,15 @@ async function sendApprovalNotification(tool: {
 }
 
 export default async function handler(req: AdminRequest, res: ServerResponse) {
-  if (req.method !== "POST") {
-    respond(res, 405, { success: false, error: "Method not allowed" });
-    return;
-  }
-
+  // The whole route is wrapped: a throw from Supabase, Resend, the body parser or
+  // a missing environment variable must become a JSON 500 instead of an
+  // unhandled lambda crash (which the admin UI can only render as "unavailable").
   try {
+    if (req.method !== "POST") {
+      respond(res, 405, { success: false, error: "Method not allowed" });
+      return;
+    }
+
     const rawBody = typeof req.body === "string" ? req.body : await collectBody(req);
     let payload: { action?: unknown; toolId?: unknown };
     try {
@@ -242,16 +233,30 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
 
     const supabaseUrl =
       process.env.SUPABASE_URL?.trim() || process.env.VITE_SUPABASE_URL?.trim() || "";
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
 
-    if (!supabaseUrl || !serviceRoleKey) {
+    // Validate the environment before the client is constructed: without the
+    // service-role key the write silently fell through to RLS (PostgREST reports
+    // "0 rows matched" *without* an error, so the queue looked like it worked).
+    if (!serviceRoleKey) {
+      console.error("Missing SUPABASE_SERVICE_ROLE_KEY");
       console.error(
-        "[Admin Tools] Missing SUPABASE_SERVICE_ROLE_KEY / SUPABASE_URL (or VITE_SUPABASE_URL) environment variables.",
+        "[Admin Tools] Set SUPABASE_SERVICE_ROLE_KEY in Vercel -> Project Settings -> Environment Variables, then redeploy.",
       );
       respond(res, 500, {
         success: false,
         error:
-          "Server is not configured for admin writes. Set SUPABASE_SERVICE_ROLE_KEY (and SUPABASE_URL) in Vercel.",
+          "Server is not configured for admin writes: SUPABASE_SERVICE_ROLE_KEY is missing. Set it in Vercel and redeploy.",
+      });
+      return;
+    }
+
+    if (!supabaseUrl) {
+      console.error("[Admin Tools] Missing SUPABASE_URL (or VITE_SUPABASE_URL).");
+      respond(res, 500, {
+        success: false,
+        error:
+          "Server is not configured for admin writes: SUPABASE_URL (or VITE_SUPABASE_URL) is missing. Set it in Vercel and redeploy.",
       });
       return;
     }
@@ -265,9 +270,20 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
       return;
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    // `createClient` throws on a malformed URL ("Invalid supabaseUrl: ..."),
+    // which is an environment misconfiguration rather than a client error, so it
+    // is reported as such instead of bubbling up as a generic handler failure.
+    let supabaseAdmin: ServiceRoleClient;
+    try {
+      supabaseAdmin = createServiceRoleClient({ supabaseUrl, serviceRoleKey });
+    } catch (clientError) {
+      console.error("[Admin Tools] Supabase admin client creation failed:", clientError);
+      respond(res, 500, {
+        success: false,
+        error: `Server is not configured for admin writes: ${errorMessage(clientError)}`,
+      });
+      return;
+    }
 
     // Verify the caller's JWT against Supabase itself: a forged or expired
     // token is rejected here, before any write happens.
@@ -282,7 +298,7 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
       return;
     }
 
-    if (!isAdminUser(userData.user)) {
+    if (!isAdminRecord(userData.user)) {
       respond(res, 403, {
         success: false,
         error:
@@ -327,9 +343,9 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
       return;
     }
 
-    const changes = changesForAction(action);
-
-    if (!changes) {
+    // `delete` gets its own explicit branch so it can never be reached by
+    // accident from the column mapping below (see `changesForAction`).
+    if (action === "delete") {
       const { data: deletedRows, error } = await supabaseAdmin
         .from("tools")
         .delete()
@@ -363,6 +379,22 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
 
       console.log(`[Admin Tools] Deleted listing ${toolId} as ${userData.user.email}.`);
       respond(res, 200, { success: true, action, toolId, affected });
+      return;
+    }
+
+    const changes = changesForAction(action);
+
+    // Defensive: unreachable while `changesForAction` stays exhaustive, but an
+    // action with no column mapping must be reported instead of writing
+    // something the caller did not ask for.
+    if (!changes) {
+      console.error(
+        `[Admin Tools] No column mapping for action "${action}" - refusing to write.`,
+      );
+      respond(res, 400, {
+        success: false,
+        error: `Unsupported admin action: ${action}.`,
+      });
       return;
     }
 
@@ -431,11 +463,17 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
     }
 
     respond(res, 200, { success: true, action, toolId, affected });
-  } catch (err) {
-    console.error("[Admin Tools] Handler error:", err);
-    respond(res, 500, {
-      success: false,
-      error: "Internal server error processing the admin request.",
-    });
+  } catch (error) {
+    // Last line of defence: anything that escaped the checks above (a PostgREST
+    // throw, a Resend network error, a malformed body) is answered as JSON so the
+    // admin UI shows the reason instead of a crashed function. `headersSent` is
+    // checked because a throw *after* `respond` cannot send a second status line.
+    console.error("[Admin Tools] Handler error:", error);
+    if (!res.headersSent) {
+      respond(res, 500, {
+        success: false,
+        error: errorMessage(error) || "Internal server error",
+      });
+    }
   }
 }

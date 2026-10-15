@@ -74,12 +74,33 @@ import {
   getPricingBadgeColor,
   getSafeHostname,
   getSafeWebsiteUrl,
+  initialToolImageSource,
+  nextToolImageSource,
+  resolveToolImageSrc,
+  FALLBACK_TOOL_IMAGE_URL,
+  TOOL_IMAGE_SOURCES,
 } from "../src/lib/toolDisplay";
 import { buildCategoryOptions, matchesToolFilters, sortTools } from "../src/lib/toolFilters";
 import { getToolSlug } from "../src/lib/toolSlug";
 import { syncResendAudienceContact } from "../api/_lib/resendAudience";
 import { ALL_CATEGORIES } from "../src/types/directory";
 import type { Tool } from "../src/types/directory";
+import {
+  EMAIL_PATTERN as SERVER_EMAIL_PATTERN,
+  escapeHtml,
+  isValidEmail as isValidServerEmail,
+  sanitizeHeaderValue,
+} from "../api/_lib/email";
+import { clientIpFromRequest, consumeRateLimit, resetRateLimits } from "../api/_lib/rateLimit";
+import { OG_TEXT_LIMITS, ogText } from "../api/_lib/ogText";
+import { buildLocalAcquisitionOffer } from "../src/lib/acquisition";
+import { authorizationHeader, getAccessToken } from "../src/lib/session";
+import { applyToolOgMetadata, buildToolOgMetadata } from "../src/lib/toolOgMetadata";
+import type { HeadOwnerLike, MetaElementLike } from "../src/lib/toolOgMetadata";
+import {
+  EMAIL_PATTERN as CLIENT_EMAIL_PATTERN,
+  isValidEmail as isValidClientEmail,
+} from "../src/lib/validation";
 
 /* ------------------------------------------------------------------ harness */
 
@@ -390,6 +411,22 @@ check("ToolCard hides acquisition CTAs for non-sale listings",
   !freeCardHtml.includes("Make Offer") && !freeCardHtml.includes("FOR SALE"));
 check("ToolCard exposes an accessible favorite control",
   freeCardHtml.includes('aria-label="Save to favorites"'));
+// `public.tools` has no rating column, so `tool.rating ?? "4.5"` fabricated a
+// 4.5-star score on every listing the API returned. The block is now rendered
+// only for a listing that actually carries a numeric rating.
+check("ToolCard renders no rating for a listing that has none",
+  !freeCardHtml.includes("fill-amber-500") && !freeCardHtml.includes("4.5"));
+const ratedCardHtml = render(<ToolCard tool={{ ...freeTool, rating: 4.9 }} onToggleUpvote={noop} />);
+check("ToolCard renders the rating a listing does carry",
+  ratedCardHtml.includes("fill-amber-500") && ratedCardHtml.includes("4.9"));
+// A blank/unsafe `website_url` used to produce an `<a>` with no `href`: styled as
+// a link, but it did nothing. It is plain text now.
+const unusableUrlCardHtml = render(
+  <ToolCard tool={{ ...freeTool, website_url: "" }} onToggleUpvote={noop} />,
+);
+check("ToolCard does not render a dead link for an unusable website_url",
+  unusableUrlCardHtml.includes(freeTool.name) &&
+  !unusableUrlCardHtml.includes("href="));
 check("ToolCardSkeleton renders a loading placeholder",
   render(<ToolCardSkeleton />).includes("animate-pulse"));
 
@@ -439,6 +476,9 @@ check("the detail modal says so instead of offering a dead link",
   poisonedDetailHtml.includes("Website unavailable") &&
   !poisonedDetailHtml.includes("javascript:") &&
   !poisonedDetailHtml.includes("data:text/html"));
+check("the detail modal renders the avatar instead of a broken <img>",
+  !poisonedDetailHtml.includes("<img") && poisonedDetailHtml.includes("initial avatar"),
+  poisonedDetailHtml.slice(0, 400));
 
 // Bare hosts are what people type into the submit form; they used to render as
 // href="warp.dev" (a link back to the directory itself) with no favicon.
@@ -453,6 +493,44 @@ check("a bare host still renders a working link and favicon",
   bareHostHtml.includes('href="https://warp.dev/pricing"') &&
   bareHostHtml.includes("https://www.google.com/s2/favicons?domain=warp.dev"),
   bareHostHtml.slice(0, 400));
+
+// The logo chain is the only thing standing between a dead `icon_url`/favicon and
+// a visibly broken image, so it is asserted on its own rather than through the
+// components: custom -> favicon -> hard-coded fallback -> letter avatar, exactly
+// one step per `onError`, ending on the terminal avatar state that cannot loop.
+const chainIsMonotonic = TOOL_IMAGE_SOURCES.every(
+  (source, index) =>
+    index === TOOL_IMAGE_SOURCES.length - 1 ||
+    nextToolImageSource(source) === TOOL_IMAGE_SOURCES[index + 1],
+);
+check("the logo chain advances in declaration order and terminates on the avatar",
+  chainIsMonotonic &&
+  initialToolImageSource(true, true) === "custom" &&
+  initialToolImageSource(false, true) === "favicon" &&
+  initialToolImageSource(false, false) === "initial" &&
+  nextToolImageSource("custom") === "favicon" &&
+  nextToolImageSource("favicon") === "fallback" &&
+  // A dead hard-coded fallback must not restart the chain at "custom".
+  nextToolImageSource("fallback") === "initial" &&
+  nextToolImageSource("initial") === "initial" &&
+  nextToolImageSource(nextToolImageSource(nextToolImageSource(nextToolImageSource("custom")))) === "initial");
+
+const customIconUrl = "https://cdn.example.com/mark.png";
+const faviconServiceUrl = "https://www.google.com/s2/favicons?domain=warp.dev&sz=128";
+check("a custom icon wins, the favicon is the runner-up and a missing value degrades forward",
+  resolveToolImageSrc("custom", customIconUrl, faviconServiceUrl) === customIconUrl &&
+  resolveToolImageSrc("custom", null, faviconServiceUrl) === faviconServiceUrl &&
+  resolveToolImageSrc("favicon", customIconUrl, faviconServiceUrl) === faviconServiceUrl &&
+  resolveToolImageSrc("favicon", customIconUrl, null) === FALLBACK_TOOL_IMAGE_URL &&
+  resolveToolImageSrc("fallback", customIconUrl, faviconServiceUrl) === FALLBACK_TOOL_IMAGE_URL &&
+  // The avatar is inline SVG, so the chain deliberately yields no `src` at all -
+  // which is what stops React rendering `src="undefined"`.
+  resolveToolImageSrc("initial", customIconUrl, faviconServiceUrl) === null,
+  String(resolveToolImageSrc("initial", customIconUrl, faviconServiceUrl)));
+check("the hard-coded fallback is an absolute, non-empty https asset",
+  FALLBACK_TOOL_IMAGE_URL.startsWith("https://") &&
+  FALLBACK_TOOL_IMAGE_URL.length > "https://".length &&
+  !FALLBACK_TOOL_IMAGE_URL.includes("undefined"));
 
 const heroHtml = render(
   <Hero
@@ -1461,6 +1539,63 @@ const invokeAdmin = (
 
 check("GET is rejected with 405", (await invoke(adminToolsHandler, { method: "GET" })).status === 405);
 
+// Environment misconfiguration has to reach the admin UI as an actionable 500:
+// before this guard the request went ahead on a `createClient(url, "")` client,
+// and PostgREST answers a service-role-less delete with "0 rows matched" *and no
+// error*, so the queue looked like it had worked while the row stayed put.
+const missingKeyBackend = createAdminStub();
+const missingKeyResponse = await invokeAdmin(missingKeyBackend.stub, {
+  env: { SUPABASE_SERVICE_ROLE_KEY: undefined },
+});
+check("a missing SUPABASE_SERVICE_ROLE_KEY is a 500 that names the variable",
+  missingKeyResponse.status === 500 &&
+  missingKeyResponse.body?.success === false &&
+  String(missingKeyResponse.body?.error ?? "").includes("SUPABASE_SERVICE_ROLE_KEY") &&
+  // Nothing may be sent to Supabase without the key.
+  missingKeyBackend.calls.length === 0,
+  JSON.stringify(missingKeyResponse.body));
+
+const missingUrlBackend = createAdminStub();
+const missingUrlResponse = await invokeAdmin(missingUrlBackend.stub, {
+  env: { SUPABASE_URL: undefined, VITE_SUPABASE_URL: undefined },
+});
+check("a missing SUPABASE_URL is a 500 that names the variable",
+  missingUrlResponse.status === 500 &&
+  missingUrlResponse.body?.success === false &&
+  String(missingUrlResponse.body?.error ?? "").includes("SUPABASE_URL") &&
+  missingUrlBackend.calls.length === 0,
+  JSON.stringify(missingUrlResponse.body));
+
+// `createClient` throws ("Invalid supabaseUrl: Must be a valid HTTP or HTTPS
+// URL.") on a malformed value. That is a deployment mistake, so it must be
+// reported as a 500 - not as a 401, and not as an unhandled crash.
+const badUrlBackend = createAdminStub();
+const badUrlResponse = await invokeAdmin(badUrlBackend.stub, {
+  env: { SUPABASE_URL: "project.supabase.co" },
+});
+check("a malformed SUPABASE_URL surfaces the thrown configuration error as a 500",
+  badUrlResponse.status === 500 &&
+  badUrlResponse.body?.success === false &&
+  /supabaseUrl/i.test(String(badUrlResponse.body?.error ?? "")),
+  JSON.stringify(badUrlResponse.body));
+
+// Any other throw (here: an oversized body rejected by `collectBody`) must also be
+// answered as JSON, because an unhandled lambda crash returns an HTML error page
+// the admin UI can only render as "endpoint unavailable".
+const oversizedResponse = await withEnv(adminEnv, () =>
+  withFetch(createAdminStub().stub, () =>
+    invoke(adminToolsHandler, {
+      headers: { authorization: "Bearer session-jwt" },
+      body: `{"action":"list","padding":"${"x".repeat(1_000_001)}"}`,
+    }),
+  ),
+);
+check("an unhandled rejection is answered as JSON 500 instead of a crashed function",
+  oversizedResponse.status === 500 &&
+  oversizedResponse.body?.success === false &&
+  String(oversizedResponse.body?.error ?? "").length > 0,
+  JSON.stringify(oversizedResponse.body));
+
 const queueRows = [{ id: deleteRowId, name: "Pending queue row", seller_contact: "owner@example.com" }];
 const queueBackend = createAdminStub({ rows: queueRows });
 const queueResponse = await invokeAdmin(queueBackend.stub, { action: "list" });
@@ -1712,6 +1847,539 @@ check("a listing that appears mid-insert is upgraded instead of failing the webh
   raceResult.body?.created !== true &&
   raceBackend.calls.filter((call) => call.method === "PATCH").length === 3,
   JSON.stringify(raceResult.body));
+
+/* -------------------------------------------- hardening: listing preview cards */
+
+section("src/lib/toolOgMetadata.ts - listing preview cards");
+
+type HeadMetaStub = MetaElementLike & {
+  attributes: Record<string, string>;
+  attached: boolean;
+  removed: boolean;
+};
+
+/** Minimal `<head>`: `querySelector`, `createElement` and `appendChild`, nothing else. */
+const createHeadStub = (
+  preexisting: Array<{ attribute: string; key: string; content: string }> = [],
+) => {
+  const nodes: HeadMetaStub[] = [];
+  const appended: HeadMetaStub[] = [];
+
+  const makeNode = (attributes: Record<string, string>, attached: boolean): HeadMetaStub => {
+    const node: HeadMetaStub = {
+      attributes: { ...attributes },
+      attached,
+      removed: false,
+      getAttribute: (name: string) => node.attributes[name] ?? null,
+      setAttribute: (name: string, value: string) => {
+        node.attributes[name] = value;
+      },
+      remove: () => {
+        node.removed = true;
+        node.attached = false;
+      },
+      get parentNode(): unknown {
+        return node.attached ? node : null;
+      },
+    };
+    nodes.push(node);
+    return node;
+  };
+
+  for (const entry of preexisting) {
+    makeNode({ [entry.attribute]: entry.key, content: entry.content }, true);
+  }
+
+  const owner: HeadOwnerLike<HeadMetaStub> = {
+    createElement: () => makeNode({}, false),
+    head: {
+      querySelector: (selector: string) => {
+        const parsed = /^meta\[(\w+)="(.+)"\]$/.exec(selector);
+        const [, attribute, key] = parsed ?? [];
+        if (!attribute || !key) return null;
+        return nodes.find((node) => node.attached && node.attributes[attribute] === key) ?? null;
+      },
+      appendChild: (node: HeadMetaStub) => {
+        node.attached = true;
+        appended.push(node);
+        return node;
+      },
+    },
+  };
+
+  return { owner, nodes, appended };
+};
+
+const siteTitle = "StackDirectory - Discover the best software products";
+const headStub = createHeadStub([
+  { attribute: "property", key: "og:title", content: siteTitle },
+  { attribute: "name", key: "twitter:card", content: "summary_large_image" },
+]);
+const ogEntries = buildToolOgMetadata({
+  name: "DocuVector AI",
+  tagline: "Contract intelligence for compliance teams",
+  imageUrl: "https://apps.stackbuildco.com/api/og?title=DocuVector%20AI",
+  shareUrl: "https://apps.stackbuildco.com/?tool=docuvector-ai",
+});
+const headNode = (key: string): HeadMetaStub | undefined =>
+  headStub.nodes.find(
+    (node) => node.attributes.property === key || node.attributes.name === key,
+  );
+
+check("a listing is described in both card dialects",
+  ogEntries.length === 8 &&
+  ogEntries.filter(([attribute]) => attribute === "property").length === 4 &&
+  ogEntries.filter(([attribute]) => attribute === "name").length === 4);
+check("the title, canonical url and image come from the listing",
+  ogEntries.some(([, key, content]) => key === "og:title" && content === "DocuVector AI") &&
+  ogEntries.some(([, key, content]) => key === "og:url" && content.includes("tool=docuvector-ai")) &&
+  ogEntries.some(([, key, content]) => key === "twitter:image" && content.includes("/api/og")));
+
+const restoreHead = applyToolOgMetadata(headStub.owner, ogEntries);
+check("an existing tag is updated in place, only missing ones are appended",
+  headStub.appended.length === 6 &&
+  headNode("og:title")?.getAttribute("content") === "DocuVector AI",
+  `${headStub.appended.length} appended`);
+check("every tag the module creates really reaches the head",
+  headStub.appended.every((node) => node.attached));
+restoreHead();
+// The first implementation deleted every tag it had touched, so closing one
+// listing stripped the site's own preview card until the next reload.
+check("closing the listing restores the site's own preview card",
+  headNode("og:title")?.getAttribute("content") === siteTitle &&
+  headNode("og:title")?.removed === false);
+check("only the tags this module created are removed",
+  headStub.appended.every((node) => node.removed));
+check("closing the listing leaves the tags it did not create alone",
+  headNode("twitter:card")?.getAttribute("content") === "summary_large_image" &&
+  headNode("twitter:card")?.removed === false);
+
+const fullHead = createHeadStub(
+  ogEntries.map(([attribute, key, content]) => ({ attribute, key, content })),
+);
+const restoreFullHead = applyToolOgMetadata(fullHead.owner, ogEntries);
+check("re-opening a listing never duplicates a tag that already exists",
+  fullHead.appended.length === 0);
+restoreFullHead();
+check("restoring a head that already had every tag removes nothing",
+  fullHead.nodes.every((node) => !node.removed));
+
+/* ------------------------- hardening: the shared client/server helper layer */
+
+section("Shared address, header and rate-limit helpers");
+
+// `src/lib/validation.ts` (browser) and `api/_lib/email.ts` (Node) hold one copy
+// of the address rule each - `api/` must not import from `src/` - so both copies
+// are asserted here. Without this the two drift and the forms accept what the
+// relay rejects (or, worse, the relay accepts what the forms reject).
+check("the client and the server share one address pattern",
+  CLIENT_EMAIL_PATTERN.source === SERVER_EMAIL_PATTERN.source &&
+  CLIENT_EMAIL_PATTERN.flags === SERVER_EMAIL_PATTERN.flags);
+
+const deliverableAddresses = [
+  "owner@example.com",
+  "first.last+tag@sub.example.co.uk",
+  "  padded@example.co  ",
+];
+const undeliverableAddresses = [
+  "",
+  "   ",
+  "a@b",
+  "a b@c.com",
+  "@example.com",
+  "owner@example",
+  "owner@example.com\r\nBcc: attacker@example.com",
+];
+check("deliverable addresses pass both copies",
+  deliverableAddresses.every((address) => isValidClientEmail(address) && isValidServerEmail(address)),
+  deliverableAddresses
+    .filter((address) => !isValidClientEmail(address) || !isValidServerEmail(address)).join(", "));
+check("malformed and CR/LF-carrying addresses fail both copies",
+  undeliverableAddresses.every((address) => !isValidClientEmail(address) && !isValidServerEmail(address)),
+  undeliverableAddresses
+    .filter((address) => isValidClientEmail(address) || isValidServerEmail(address)).join(", "));
+check("a non-string address is never deliverable",
+  !isValidClientEmail(undefined) && !isValidClientEmail(null) && !isValidServerEmail(42));
+
+check("a header value cannot smuggle a second header",
+  sanitizeHeaderValue("owner@example.com\r\nBcc: attacker@example.com") ===
+    "owner@example.com Bcc: attacker@example.com");
+check("header values are length-capped", sanitizeHeaderValue("x".repeat(500)).length === 200);
+check("HTML escaping covers the five breakout characters",
+  escapeHtml('<b>Tom & "Jerry\'s" list</b>') ===
+    "&lt;b&gt;Tom &amp; &quot;Jerry&#39;s&quot; list&lt;/b&gt;");
+
+resetRateLimits();
+const limitDecisions = [1, 2, 3, 4, 5].map(() => consumeRateLimit("verify:unit", 3, 60_000));
+check("the limiter allows exactly `limit` requests per window",
+  limitDecisions.slice(0, 3).every((decision) => decision.allowed) &&
+  !limitDecisions[3].allowed &&
+  !limitDecisions[4].allowed,
+  JSON.stringify(limitDecisions.map((decision) => decision.allowed)));
+check("a blocked request reports a retry delay and nothing remaining",
+  limitDecisions[3].remaining === 0 && limitDecisions[2].remaining === 0 &&
+  limitDecisions[3].retryAfterSeconds >= 1);
+check("buckets are per key, so one client cannot throttle another",
+  consumeRateLimit("verify:other", 3, 60_000).allowed);
+resetRateLimits();
+check("resetRateLimits opens a fresh window",
+  consumeRateLimit("verify:unit", 3, 60_000).remaining === 2);
+
+check("x-forwarded-for's first hop identifies the client",
+  clientIpFromRequest({ headers: { "x-forwarded-for": "203.0.113.5, 70.41.3.18" } }) === "203.0.113.5");
+check("an IPv4-mapped address is normalised to its dotted form",
+  clientIpFromRequest({ headers: { "x-forwarded-for": "::ffff:203.0.113.9" } }) === "203.0.113.9");
+check("the socket address is the fallback",
+  clientIpFromRequest({ headers: {}, socket: { remoteAddress: "198.51.100.4" } }) === "198.51.100.4");
+check("an unidentifiable client is not throttled at all",
+  clientIpFromRequest({ headers: {} }) === "");
+
+check("a signed-out browser holds no access token", (await getAccessToken()) === null);
+check("a signed-out browser sends no Authorization header",
+  Object.keys(await authorizationHeader()).length === 0);
+
+section("api/_lib/ogText.ts - generated card fields");
+
+// The card is rendered from `?title=`/`?tagline=`/`?category=`/`?pricing=`, so
+// every value is caller-controlled. Uncapped, `?title=<hundreds of kB>` was laid
+// out by satori verbatim.
+check("a card field is collapsed onto one line",
+  ogText("Docu\nVector\tAI", "fallback", 60) === "Docu Vector AI");
+check("control characters never reach the canvas",
+  ogText("Docu\u0000Vector\u009F AI", "fallback", 60) === "Docu Vector AI");
+check("an over-long field is capped with an ellipsis inside the limit",
+  ogText("x".repeat(500), "fallback", OG_TEXT_LIMITS.title).length === OG_TEXT_LIMITS.title &&
+  ogText("x".repeat(500), "fallback", OG_TEXT_LIMITS.title) === `${"x".repeat(OG_TEXT_LIMITS.title - 3)}...`);
+check("an empty or missing field falls back to the site's own copy",
+  ogText("", "StackDirectory", 120) === "StackDirectory" &&
+  ogText("   ", "StackDirectory", 120) === "StackDirectory" &&
+  ogText(null, "StackDirectory", 120) === "StackDirectory" &&
+  ogText(42, "StackDirectory", 120) === "StackDirectory");
+check("a field that already fits is rendered exactly as written",
+  ogText("DocuVector AI", "fallback", OG_TEXT_LIMITS.title) === "DocuVector AI");
+
+section("Local acquisition offers - the deal-room contract");
+
+const builtOffer = buildLocalAcquisitionOffer({
+  toolId: "tool-1",
+  userId: "user-7",
+  buyerName: "  Ada Lovelace  ",
+  buyerEmail: " ada@example.com ",
+  offerAmount: 1200,
+  message: "   ",
+  now: new Date("2026-01-02T03:04:05.000Z"),
+});
+check("a local offer records the buyer_id the deal room filters on",
+  builtOffer.buyer_id === "user-7" && builtOffer.tool_id === "tool-1");
+check("a local offer is trimmed, pending and stamped",
+  builtOffer.buyer_name === "Ada Lovelace" &&
+  builtOffer.buyer_email === "ada@example.com" &&
+  builtOffer.status === "pending" &&
+  builtOffer.created_at === "2026-01-02T03:04:05.000Z");
+check("a blank message is stored as null, not as whitespace", builtOffer.message === null);
+check("offers for two listings never share an id",
+  buildLocalAcquisitionOffer({
+    toolId: "tool-2",
+    userId: "user-7",
+    buyerName: "Ada",
+    buyerEmail: "ada@example.com",
+    offerAmount: 1,
+  }).id !== builtOffer.id);
+
+resetStorage();
+check("an offer round-trips through storage and is still found by buyer_id",
+  writeJsonArray(STORAGE_KEYS.acquisitionOffers, [builtOffer]) &&
+  readJsonArray<{ buyer_id?: string }>(STORAGE_KEYS.acquisitionOffers)
+    .filter((entry) => entry.buyer_id === "user-7").length === 1);
+
+// Private mode and a full quota both make `setItem` throw. The helpers must turn
+// that into `false` so a form can fail loudly, instead of reporting success for
+// an offer (or a bookmark, or a vote) that was never stored.
+const storageDescriptor = Object.getOwnPropertyDescriptor(
+  globalThis,
+  "localStorage",
+) as PropertyDescriptor;
+Object.defineProperty(globalThis, "localStorage", {
+  configurable: true,
+  value: {
+    getItem: () => null,
+    setItem: () => {
+      throw new Error("QuotaExceededError");
+    },
+    removeItem: noop,
+  },
+});
+check("a rejected storage write reports failure instead of throwing",
+  writeJsonArray(STORAGE_KEYS.tools, [pendingTool]) === false &&
+  writeStringArray(STORAGE_KEYS.savedTools, ["one"]) === false);
+Object.defineProperty(globalThis, "localStorage", storageDescriptor);
+
+/* ------------------------------- hardening: the public mail relay's own rules */
+
+section("api/send-email.ts - address validation and session guards");
+
+const emailEnv = {
+  ...adminEnv,
+  RESEND_API_KEY: "re_test",
+  RESEND_FROM_EMAIL: "StackDirectory <noreply@example.com>",
+};
+
+const offerPayload = (overrides: Record<string, unknown> = {}) => ({
+  type: "NEW_OFFER",
+  toolName: "DocuVector AI",
+  toolSlug: "docuvector-ai",
+  ownerEmail: "owner@example.com",
+  offerAmount: 1200,
+  message: "Is the price negotiable?",
+  ...overrides,
+});
+
+const resendCalls = (backend: { calls: ApiCall[] }) =>
+  backend.calls.filter((call) => call.url.includes("api.resend.com/emails"));
+
+// Addresses are caller-supplied, so an undeliverable or header-carrying one has
+// to be refused before Resend is asked to send anything.
+const invalidRecipientBackend = createAdminStub();
+const invalidRecipient = await withEnv(emailEnv, () =>
+  withFetch(invalidRecipientBackend.stub, () =>
+    invoke(sendEmailHandler, {
+      body: JSON.stringify(offerPayload({ ownerEmail: "not-an-email" })),
+    }),
+  ),
+);
+check("an undeliverable recipient is rejected before anything is sent",
+  invalidRecipient.status === 400 && invalidRecipientBackend.calls.length === 0,
+  JSON.stringify(invalidRecipient.body));
+
+const injectedRecipientBackend = createAdminStub();
+const injectedRecipient = await withEnv(emailEnv, () =>
+  withFetch(injectedRecipientBackend.stub, () =>
+    invoke(sendEmailHandler, {
+      body: JSON.stringify(
+        offerPayload({ ownerEmail: "owner@example.com\r\nBcc: attacker@example.com" }),
+      ),
+    }),
+  ),
+);
+check("a CR/LF-carrying recipient is rejected before anything is sent",
+  injectedRecipient.status === 400 && injectedRecipientBackend.calls.length === 0,
+  JSON.stringify(injectedRecipient.body));
+
+// `NEW_OFFER` and `APP_APPROVED` are hand-triggered, so they must carry the
+// session of the visitor who triggered them. Without the guard the endpoint is an
+// open relay: anyone could mail any listing owner from StackDirectory's domain.
+const anonymousOffer = await withEnv(emailEnv, () =>
+  withFetch(createAdminStub().stub, () =>
+    invoke(sendEmailHandler, { body: JSON.stringify(offerPayload()) }),
+  ),
+);
+check("an anonymous NEW_OFFER is refused once Supabase is configured",
+  anonymousOffer.status === 401, JSON.stringify(anonymousOffer.body));
+
+const forgedSessionBackend = createAdminStub({ user: null });
+const forgedSession = await withEnv(emailEnv, () =>
+  withFetch(forgedSessionBackend.stub, () =>
+    invoke(sendEmailHandler, {
+      headers: { authorization: "Bearer forged-token" },
+      body: JSON.stringify(offerPayload()),
+    }),
+  ),
+);
+check("a token Supabase does not recognise is refused",
+  forgedSession.status === 401 && resendCalls(forgedSessionBackend).length === 0,
+  JSON.stringify(forgedSession.body));
+
+const memberUser = { id: "u2", email: "member@example.com", app_metadata: {} };
+const memberOfferBackend = createAdminStub({ user: memberUser });
+const memberOffer = await withEnv(emailEnv, () =>
+  withFetch(memberOfferBackend.stub, () =>
+    invoke(sendEmailHandler, {
+      headers: { authorization: "Bearer session-jwt" },
+      body: JSON.stringify(offerPayload()),
+    }),
+  ),
+);
+check("a signed-in visitor's offer is delivered",
+  memberOffer.status === 200 && resendCalls(memberOfferBackend).length === 1,
+  JSON.stringify(memberOffer.body));
+const offerMail = JSON.parse(
+  resendCalls(memberOfferBackend)[0]?.body || "{}",
+) as Record<string, unknown>;
+check("the offer is addressed to the listing owner and names the listing",
+  offerMail.to === "owner@example.com" &&
+  String(offerMail.subject ?? "").includes("DocuVector AI"),
+  JSON.stringify(offerMail));
+
+const approvalPayload = {
+  type: "APP_APPROVED",
+  toolName: "DocuVector AI",
+  toolSlug: "docuvector-ai",
+  submitterEmail: "submitter@example.com",
+};
+
+const memberApprovalBackend = createAdminStub({ user: memberUser });
+const memberApproval = await withEnv(emailEnv, () =>
+  withFetch(memberApprovalBackend.stub, () =>
+    invoke(sendEmailHandler, {
+      headers: { authorization: "Bearer session-jwt" },
+      body: JSON.stringify(approvalPayload),
+    }),
+  ),
+);
+check("a signed-in non-admin cannot trigger the approval notification",
+  memberApproval.status === 403 && resendCalls(memberApprovalBackend).length === 0,
+  JSON.stringify(memberApproval.body));
+
+const adminApprovalBackend = createAdminStub({ user: adminUser });
+const adminApproval = await withEnv(emailEnv, () =>
+  withFetch(adminApprovalBackend.stub, () =>
+    invoke(sendEmailHandler, {
+      headers: { authorization: "Bearer session-jwt" },
+      body: JSON.stringify(approvalPayload),
+    }),
+  ),
+);
+check("an administrator can trigger the approval notification",
+  adminApproval.status === 200 && resendCalls(adminApprovalBackend).length === 1,
+  JSON.stringify(adminApproval.body));
+
+// Deliberate: a deployment with no Supabase project has no session to verify, so
+// the endpoint keeps its previous best-effort behaviour instead of going dark.
+const unconfiguredBackend = createAdminStub();
+const unconfiguredOffer = await withEnv(
+  {
+    ...emailEnv,
+    SUPABASE_URL: undefined,
+    VITE_SUPABASE_URL: undefined,
+    SUPABASE_SERVICE_ROLE_KEY: undefined,
+  },
+  () =>
+    withFetch(unconfiguredBackend.stub, () =>
+      invoke(sendEmailHandler, { body: JSON.stringify(offerPayload()) }),
+    ),
+);
+check("with no Supabase project there is no session to verify",
+  unconfiguredOffer.status === 200 && resendCalls(unconfiguredBackend).length === 1,
+  JSON.stringify(unconfiguredOffer.body));
+
+// The relay is public, so one client must not be able to spend the deployment's
+// Resend quota in a loop. The limit is applied before the body is even parsed.
+resetRateLimits();
+const throttledBackend = createAdminStub();
+const throttled = await withEnv(
+  {
+    ...emailEnv,
+    SUPABASE_URL: undefined,
+    VITE_SUPABASE_URL: undefined,
+    SUPABASE_SERVICE_ROLE_KEY: undefined,
+  },
+  async () => {
+    const responses: Array<{ status: number; body: Record<string, unknown> | null }> = [];
+    for (let request = 0; request < 16; request += 1) {
+      responses.push(
+        await withFetch(throttledBackend.stub, () =>
+          invoke(sendEmailHandler, {
+            headers: { "x-forwarded-for": "198.51.100.7" },
+            body: JSON.stringify(offerPayload()),
+          }),
+        ),
+      );
+    }
+    return responses;
+  },
+);
+check("one client is throttled after 15 requests in the window",
+  throttled.slice(0, 15).every((response) => response.status === 200) &&
+  throttled[15].status === 429,
+  throttled.map((response) => response.status).join(","));
+check("the throttled request is refused before it can send mail",
+  throttled[15].body?.success === false &&
+  String(throttled[15].body?.error ?? "").includes("Too many requests") &&
+  resendCalls(throttledBackend).length === 15,
+  JSON.stringify(throttled[15].body));
+resetRateLimits();
+
+/* ------------- hardening: a failed upgrade must not consume its replay slot */
+
+section("api/paddle-webhook.ts - a failed upgrade releases its replay guard");
+
+// The upgrade is recorded as processed *before* the database work, and Paddle
+// only retries a delivery that did not receive a 2xx. A transient Supabase
+// failure therefore had to release that key again: otherwise Paddle's retry was
+// answered `duplicate: true` and the paying customer's listing was never featured.
+const retryId = createToolId();
+const retryEvent = buildPaddleEvent(retryId, "https://retry.app");
+const retryRow = {
+  id: retryId,
+  name: "DocuVector AI",
+  category: "AI & Machine Learning",
+  pricing_type: "Paid",
+  website_url: "https://retry.app",
+};
+
+const failingUpgradeBackend = (() => {
+  const calls: FetchCall[] = [];
+  const stub = (input: unknown, init?: { method?: string; body?: unknown }) => {
+    const url = typeof input === "string" ? input : String((input as { url?: string })?.url ?? "");
+    calls.push({
+      url,
+      method: init?.method ?? "GET",
+      body: typeof init?.body === "string" ? init.body : "",
+    });
+    if (!url.includes("/rest/v1/tools")) return jsonResponse({ success: true });
+    if (init?.method === "PATCH" || init?.method === "POST") {
+      return jsonResponse({ message: "connection to the database failed" }, false, 500);
+    }
+    return jsonResponse([retryRow]);
+  };
+  return { stub, calls };
+})();
+
+const failedUpgrade = await withEnv(productionEnv, () =>
+  withFetch(failingUpgradeBackend.stub, () =>
+    invoke(paddleWebhookHandler, {
+      body: retryEvent.raw,
+      headers: { "paddle-signature": sign(retryEvent.raw) },
+    }),
+  ),
+);
+check("a database failure answers 500 so Paddle retries",
+  failedUpgrade.status === 500,
+  JSON.stringify(failedUpgrade.body));
+check("the failed delivery does not consume the replay guard",
+  !hasProcessedEvent(`txn_1:${retryId}`));
+
+const retryBackend = createBackendStub([retryRow]);
+const retried = await withEnv(productionEnv, () =>
+  withFetch(retryBackend.stub, () =>
+    invoke(paddleWebhookHandler, {
+      body: retryEvent.raw,
+      headers: { "paddle-signature": sign(retryEvent.raw) },
+    }),
+  ),
+);
+check("Paddle's retry is applied instead of being answered as a duplicate",
+  retried.status === 200 &&
+  retried.body?.duplicate !== true &&
+  retryBackend.calls.some((call) => call.method === "PATCH"),
+  JSON.stringify(retried.body));
+check("the delivery that finally succeeded is the one that is remembered",
+  hasProcessedEvent(`txn_1:${retryId}`));
+
+const replayedBackend = createBackendStub([retryRow]);
+const replayed = await withEnv(productionEnv, () =>
+  withFetch(replayedBackend.stub, () =>
+    invoke(paddleWebhookHandler, {
+      body: retryEvent.raw,
+      headers: { "paddle-signature": sign(retryEvent.raw) },
+    }),
+  ),
+);
+check("a later replay is acknowledged without repeating any work",
+  replayed.status === 200 &&
+  replayed.body?.duplicate === true &&
+  replayedBackend.calls.length === 0,
+  JSON.stringify(replayed.body));
 
 /* ---------------------------------------------------------------- summary */
 

@@ -81,6 +81,68 @@ export const getFaviconUrl = (url?: string | null, size = 128): string | null =>
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=${size}`;
 };
 
+/**
+ * Ordered logo sources for a listing, best first.
+ *
+ * `initial` renders a letter avatar instead of an `<img>` and is terminal, so a
+ * broken image can never loop the `onError` handler back to the top of the
+ * chain.
+ */
+export const TOOL_IMAGE_SOURCES = ["custom", "favicon", "fallback", "initial"] as const;
+
+export type ToolImageSource = (typeof TOOL_IMAGE_SOURCES)[number];
+
+/**
+ * Hard-coded last-resort `src` for `<img onError>`.
+ *
+ * Needed because the favicon service answers a *missing* icon with a generic
+ * globe (so `onError` never fires) while a dead host, a blocked request or a
+ * broken `icon_url` leaves a visibly broken image behind. This is a third-party
+ * asset we do not control - swap this one constant to self-host a branded icon.
+ */
+export const FALLBACK_TOOL_IMAGE_URL = "https://abs.twimg.com/favicons/twitter.3.ico";
+
+/** First logo source to try for a listing. */
+export const initialToolImageSource = (
+  hasCustomIcon: boolean,
+  hasFavicon: boolean,
+): ToolImageSource => (hasCustomIcon ? "custom" : hasFavicon ? "favicon" : "initial");
+
+/** Source to try after `source` failed to load. `initial` always terminates. */
+export const nextToolImageSource = (source: ToolImageSource): ToolImageSource => {
+  switch (source) {
+    case "custom":
+      return "favicon";
+    case "favicon":
+      return "fallback";
+    default:
+      return "initial";
+  }
+};
+
+/**
+ * `src` for a logo source, or `null` when the avatar should be rendered instead.
+ *
+ * A missing/unusable stored value degrades to the next source in the chain, so
+ * the element never renders `src="undefined"`.
+ */
+export const resolveToolImageSrc = (
+  source: ToolImageSource,
+  customIconUrl?: string | null,
+  faviconUrl?: string | null,
+): string | null => {
+  switch (source) {
+    case "custom":
+      return customIconUrl || faviconUrl || FALLBACK_TOOL_IMAGE_URL;
+    case "favicon":
+      return faviconUrl || FALLBACK_TOOL_IMAGE_URL;
+    case "fallback":
+      return FALLBACK_TOOL_IMAGE_URL;
+    default:
+      return null;
+  }
+};
+
 /** Tailwind classes for the pricing badge rendered on listing cards. */
 export const getPricingBadgeColor = (type: PricingType | string): string => {
   switch (type) {

@@ -44,7 +44,6 @@ export function writeJsonArray<T>(key: string, value: T[]): boolean {
 export const readStringArray = (key: string): string[] =>
   readJsonArray<unknown>(key).filter((value): value is string => typeof value === "string");
 
-/** Persists a list of ids. */
-export const writeStringArray = (key: string, ids: string[]): void => {
+/** Persists a list of ids; returns `false` when persistence is unavailable. */
+export const writeStringArray = (key: string, ids: string[]): boolean =>
   writeJsonArray(key, ids);
-};

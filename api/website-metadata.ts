@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import type { IncomingMessage, ServerResponse } from "http";
+import { clientIpFromRequest, consumeRateLimit } from "./_lib/rateLimit";
 
 type MetadataRequest = IncomingMessage & { body?: unknown };
 
@@ -15,6 +16,20 @@ type WebsiteMetadata = {
 
 const MAX_HTML_BYTES = 1_000_000;
 const MAX_REDIRECTS = 4;
+/** Ceiling for a single hop. */
+const HOP_TIMEOUT_MS = 8_000;
+/**
+ * Ceiling for the whole inspection (redirects included).
+ *
+ * Without it the handler could spend `MAX_REDIRECTS + 1` × 8s = 40s on one
+ * request, and the platform (Vercel's default limit is 10s) would kill the
+ * function mid-flight - so the caller got an HTML timeout page instead of the
+ * JSON reason this endpoint exists to return.
+ */
+const TOTAL_BUDGET_MS = 12_000;
+/** Outbound fetches one client may request per window. */
+const METADATA_RATE_LIMIT = 20;
+const METADATA_RATE_WINDOW_MS = 10 * 60 * 1000;
 const USER_AGENT = "StackDirectoryMetadataBot/1.0";
 const TECHNOLOGIES = [
   "Next.js", "React", "Vue", "Angular", "Svelte", "Astro", "TypeScript",
@@ -196,9 +211,14 @@ function extractMetadata(html: string, pageUrl: URL): WebsiteMetadata {
 
 async function fetchPage(initialUrl: string): Promise<{ html: string; url: URL }> {
   let currentUrl = await validatePublicUrl(initialUrl);
+  const deadline = Date.now() + TOTAL_BUDGET_MS;
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
+    // Each hop gets whatever is left of the shared budget, so a chain of slow
+    // redirects fails with our own JSON error instead of being killed upstream.
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error("Website inspection timed out.");
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8_000);
+    const timeout = setTimeout(() => controller.abort(), Math.min(HOP_TIMEOUT_MS, remaining));
     try {
       const response = await fetch(currentUrl, {
         redirect: "manual",
@@ -219,6 +239,13 @@ async function fetchPage(initialUrl: string): Promise<{ html: string; url: URL }
         throw new Error("The website did not return an HTML page.");
       }
       return { html: await readHtml(response), url: currentUrl };
+    } catch (error) {
+      // An aborted fetch (per-hop timeout or the shared budget) surfaces as a
+      // bare AbortError; report what actually happened instead.
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("Website inspection timed out.");
+      }
+      throw error;
     } finally {
       clearTimeout(timeout);
     }
@@ -230,6 +257,26 @@ export default async function handler(req: MetadataRequest, res: ServerResponse)
   if (req.method !== "POST") {
     respond(res, 405, { success: false, error: "Method not allowed." });
     return;
+  }
+
+  // This endpoint fetches a caller-supplied URL, so one client must not be able
+  // to use it as an unlimited outbound-fetch engine. Requests with no
+  // attributable address (local piping, the unit-test harness) are not throttled.
+  const clientIp = clientIpFromRequest(req);
+  if (clientIp) {
+    const decision = consumeRateLimit(
+      `website-metadata:${clientIp}`,
+      METADATA_RATE_LIMIT,
+      METADATA_RATE_WINDOW_MS,
+    );
+    if (!decision.allowed) {
+      res.setHeader("Retry-After", String(decision.retryAfterSeconds));
+      respond(res, 429, {
+        success: false,
+        error: "Too many website lookups. Please try again in a few minutes.",
+      });
+      return;
+    }
   }
   let body: { url?: unknown };
   if (req.body && typeof req.body === "object") {
