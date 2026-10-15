@@ -36,6 +36,7 @@ import { ToolCard, ToolCardSkeleton } from "../src/components/ToolCard";
 import { ToolDetailModal } from "../src/components/ToolDetailModal";
 import adminToolsHandler from "../api/admin-tools";
 import paddleWebhookHandler, { verifyPaddleSignature } from "../api/paddle-webhook";
+import resendAudienceHandler from "../api/resend-audience";
 import sendEmailHandler from "../api/send-email";
 import { INITIAL_TOOLS } from "../src/data/mockTools";
 import { getAdminEmails, isAdminEmail, isAdminUser } from "../src/lib/admin";
@@ -70,6 +71,7 @@ import {
 import { getHostname, getPricingBadgeColor } from "../src/lib/toolDisplay";
 import { buildCategoryOptions, matchesToolFilters, sortTools } from "../src/lib/toolFilters";
 import { getToolSlug } from "../src/lib/toolSlug";
+import { syncResendAudienceContact } from "../api/_lib/resendAudience";
 import { ALL_CATEGORIES } from "../src/types/directory";
 import type { Tool } from "../src/types/directory";
 
@@ -585,6 +587,97 @@ check("free-text fields are HTML-escaped before they reach the inbox",
   String(supportMail?.html ?? "").includes("&lt;script&gt;") &&
   !String(supportMail?.html ?? "").includes("<script>"));
 
+section("api/resend-audience.ts - submitted contact sync");
+
+const submittedAudienceCalls: Array<{ url: string; method: string; body: string }> = [];
+const submittedAudienceBackend = async (
+  input: unknown,
+  init?: { method?: string; body?: unknown },
+) => {
+  const request = input as { url?: string; method?: string; clone?: () => { text: () => Promise<string> } };
+  const url = typeof input === "string" ? input : String(request.url ?? "");
+  const body = typeof init?.body === "string"
+    ? init.body
+    : request.clone
+      ? await request.clone().text()
+      : "";
+  submittedAudienceCalls.push({
+    url,
+    method: init?.method ?? request.method ?? "GET",
+    body,
+  });
+  return jsonResponse({ id: "contact_1" });
+};
+const submittedContactSynced = await withEnv({
+  RESEND_API_KEY: "re_test",
+  RESEND_AUDIENCE_ID: "aud_1",
+}, () => withFetch(submittedAudienceBackend, () =>
+  syncResendAudienceContact("submitter@example.com", "Submitted Tool"),
+));
+const submittedAudienceCall = submittedAudienceCalls.find((call) =>
+  call.url.includes("/audiences/aud_1/contacts"),
+);
+const submittedAudienceContact = JSON.parse(submittedAudienceCall?.body ?? "{}") as Record<string, unknown>;
+check("a persisted submission syncs its verified submitter contact to the configured Audience",
+  submittedContactSynced &&
+  submittedAudienceCall?.method === "POST" &&
+  submittedAudienceContact.email === "submitter@example.com" &&
+  submittedAudienceContact.first_name === "Submitted Tool" &&
+  submittedAudienceContact.unsubscribed === false,
+  JSON.stringify({
+    synced: submittedContactSynced,
+    contact: submittedAudienceContact,
+  }));
+
+const updatedAudienceCalls: Array<{ url: string; method: string; body: string }> = [];
+const existingAudienceBackend = async (
+  input: unknown,
+  init?: { method?: string; body?: unknown },
+) => {
+  const request = input as { url?: string; method?: string; clone?: () => { text: () => Promise<string> } };
+  const url = typeof input === "string" ? input : String(request.url ?? "");
+  const method = init?.method ?? request.method ?? "GET";
+  const body = typeof init?.body === "string"
+    ? init.body
+    : request.clone
+      ? await request.clone().text()
+      : "";
+  updatedAudienceCalls.push({ url, method, body });
+  if (method === "POST") return jsonResponse({ message: "Contact already exists" }, false, 409);
+  if (method === "GET") {
+    return jsonResponse({
+      id: "existing_contact",
+      email: "submitter@example.com",
+      unsubscribed: true,
+    });
+  }
+  return jsonResponse({ id: "existing_contact" });
+};
+const existingContactUpdated = await withEnv({
+  RESEND_API_KEY: "re_test",
+  RESEND_AUDIENCE_ID: "aud_1",
+}, () => withFetch(existingAudienceBackend, () =>
+  syncResendAudienceContact("submitter@example.com", "Updated Tool"),
+));
+const audienceUpdateCall = updatedAudienceCalls.find((call) => call.method === "PATCH");
+const audienceUpdatePayload = JSON.parse(audienceUpdateCall?.body ?? "{}") as Record<string, unknown>;
+check("an existing Resend contact is updated and restored to subscribed status",
+  existingContactUpdated &&
+  updatedAudienceCalls.some((call) => call.method === "GET") &&
+  audienceUpdateCall?.url.includes("/audiences/aud_1/contacts/existing_contact") &&
+  audienceUpdatePayload.first_name === "Updated Tool" &&
+  audienceUpdatePayload.unsubscribed === false,
+  JSON.stringify({ calls: updatedAudienceCalls, update: audienceUpdatePayload }));
+
+const unauthenticatedContactResult = await withEnv({
+  SUPABASE_URL: "https://project.supabase.co",
+  SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+}, () => invoke(resendAudienceHandler, {
+  body: JSON.stringify({ toolId: createToolId() }),
+}));
+check("submission contact sync rejects requests without a verified session",
+  unauthenticatedContactResult.status === 401);
+
 /* ------------------------------------------------------------ paddle flow */
 
 section("api/paddle-webhook.ts - signature verification");
@@ -992,6 +1085,13 @@ const createAdminStub = (options: {
         options.emailFailure ? 503 : 200,
       );
     }
+    if (url.includes("api.resend.com/audiences/")) {
+      if (!call.body && typeof (input as { text?: () => Promise<string> } | undefined)?.text === "function") {
+        call.body = await (input as { text: () => Promise<string> }).text();
+      }
+      calls.push(call);
+      return jsonResponse({ id: "audience_contact_1" });
+    }
     calls.push(call);
     if (url.includes("/auth/v1/user")) {
       return user ? jsonResponse(user) : jsonResponse({ message: "invalid token" }, false, 401);
@@ -1100,10 +1200,15 @@ const approvalEmailResult = await invokeAdmin(approvalEmailBackend.stub, {
   env: {
     RESEND_API_KEY: "re_test",
     RESEND_FROM_EMAIL: "StackDirectory <noreply@example.com>",
+    RESEND_AUDIENCE_ID: "aud_1",
   },
 });
 const approvalEmailCall = approvalEmailBackend.calls.find((call) => call.url.includes("api.resend.com/emails"));
 const approvalEmail = JSON.parse(approvalEmailCall?.body ?? "{}") as Record<string, unknown>;
+const approvalAudienceCall = approvalEmailBackend.calls.find((call) =>
+  call.url.includes("api.resend.com/audiences/"),
+);
+const approvalAudienceContact = JSON.parse(approvalAudienceCall?.body ?? "{}") as Record<string, unknown>;
 check("approval sends a Resend notification using the stored submitter contact",
   approvalEmailResult.status === 200 &&
   approvalEmailCall?.method === "POST" &&
@@ -1114,6 +1219,13 @@ check("approval email includes an escaped tool name and direct listing link",
   String(approvalEmail.html ?? "").includes("Approved &lt;Tool&gt;") &&
   String(approvalEmail.html ?? "").includes("https://apps.stackbuildco.com/?tool=approved-tool"),
   String(approvalEmail.html ?? ""));
+check("approval adds the submitter to the configured Resend Audience",
+  approvalAudienceCall?.method === "POST" &&
+  approvalAudienceCall.url.includes("/audiences/aud_1/contacts") &&
+  approvalAudienceContact.email === "submitter@example.com" &&
+  approvalAudienceContact.first_name === "Approved <Tool>" &&
+  approvalAudienceContact.unsubscribed === false,
+  JSON.stringify(approvalAudienceContact));
 
 const failedApprovalEmailBackend = createAdminStub({
   rows: [{ id: deleteRowId, name: "Approved Tool", seller_contact: "submitter@example.com" }],

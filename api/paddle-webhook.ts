@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { IncomingMessage, ServerResponse } from "http";
+import { syncResendAudienceContact } from "./_lib/resendAudience";
 
 type WebhookRequest = IncomingMessage & {
   body?: unknown;
@@ -556,6 +557,14 @@ export default async function handler(
     //    live, so email problems must never fail the webhook response.
     const customerEmail =
       data?.customer?.email?.trim() || customData.customer_email?.trim() || "";
+    const submitterEmail =
+      text(customData.seller_contact) || customerEmail;
+    if (submitterEmail) {
+      await syncResendAudienceContact(
+        submitterEmail,
+        effectiveTool?.name ?? text(customData.tool_name),
+      );
+    }
     const currency =
       (typeof data?.currency_code === "string" && data.currency_code.trim()) ||
       data?.details?.totals?.currency_code ||

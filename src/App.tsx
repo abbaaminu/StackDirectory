@@ -21,6 +21,7 @@ import {
   isDuplicateRowError,
   submissionRejectionReason,
 } from "./lib/submissions";
+import { syncSubmittedToolToResend } from "./lib/resendAudience";
 import {
   readJsonArray,
   readStringArray,
@@ -339,6 +340,10 @@ export default function App() {
         `❌ Supabase rejected "${newTool.name}": ${reason}. Saved in this browser only — it is NOT in the review queue.`,
       );
       throw new Error(reason);
+    }
+
+    if (session?.access_token) {
+      syncSubmittedToolToResend(newTool.id, session.access_token);
     }
 
     showToast(

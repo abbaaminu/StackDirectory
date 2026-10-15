@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import type { IncomingMessage, ServerResponse } from "http";
+import { syncResendAudienceContact } from "./_lib/resendAudience";
 
 /**
  * Admin moderation endpoint — Vercel Serverless Function
@@ -364,11 +365,19 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
         seller_contact?: unknown;
       };
       if (typeof approvedTool.name === "string" && typeof approvedTool.id === "string") {
-        await sendApprovalNotification({
-          id: approvedTool.id,
-          name: approvedTool.name,
-          seller_contact: approvedTool.seller_contact,
-        });
+        await Promise.all([
+          sendApprovalNotification({
+            id: approvedTool.id,
+            name: approvedTool.name,
+            seller_contact: approvedTool.seller_contact,
+          }),
+          syncResendAudienceContact(
+            typeof approvedTool.seller_contact === "string"
+              ? approvedTool.seller_contact
+              : "",
+            approvedTool.name,
+          ),
+        ]);
       }
     }
 
