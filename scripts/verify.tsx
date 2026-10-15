@@ -929,7 +929,9 @@ const audienceUpdatePayload = JSON.parse(audienceUpdateCall?.body ?? "{}") as Re
 check("an existing Resend contact is updated without being re-subscribed",
   existingContactUpdated &&
   updatedAudienceCalls.some((call) => call.method === "GET") &&
-  audienceUpdateCall?.url.includes("/audiences/aud_1/contacts/existing_contact") &&
+  // `?? ""` keeps the chain a definite boolean: a bare `?.` operand short-circuits
+  // to `undefined` when no PATCH call was made.
+  (audienceUpdateCall?.url ?? "").includes("/audiences/aud_1/contacts/existing_contact") &&
   audienceUpdatePayload.first_name === "Updated Tool" &&
   // The contact returned above is `unsubscribed: true`. Flipping that flag back
   // on a PATCH would silently re-subscribe someone who opted out (a CAN-SPAM /
@@ -2305,6 +2307,22 @@ const iconRoutes =
     return route ? Promise.resolve(route) : Promise.reject(new Error(`ENOTFOUND ${target}`));
   };
 
+/**
+ * The `ServerResponse` surface `api/favicon.ts` uses, captured in a plain object.
+ *
+ * `body` is annotated rather than inferred: `Buffer.alloc` is typed
+ * `Buffer<ArrayBuffer>` in newer `@types/node` releases while `Buffer.isBuffer`
+ * narrows to `Buffer<ArrayBufferLike>`, so an inferred property would reject the
+ * assignment below (`Buffer<ArrayBufferLike> is not assignable to
+ * Buffer<ArrayBuffer>`). Annotating keeps the harness compiling under both.
+ */
+type CapturedIconResponse = {
+  statusCode: number;
+  body: Buffer;
+  setHeader(name: string, value: string): void;
+  end(value?: Buffer | string): void;
+};
+
 const callIcon = async (
   url: string,
   options: { method?: string; ip?: string } = {},
@@ -2316,7 +2334,7 @@ const callIcon = async (
   text: string;
 }> => {
   const headers: Record<string, string> = {};
-  const response = {
+  const response: CapturedIconResponse = {
     statusCode: 0,
     body: Buffer.alloc(0),
     setHeader(name: string, value: string) {
