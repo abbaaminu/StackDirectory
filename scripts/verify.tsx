@@ -35,7 +35,7 @@ import { TermsModal } from "../src/components/TermsModal";
 import { ToolCard, ToolCardSkeleton } from "../src/components/ToolCard";
 import { ToolDetailModal } from "../src/components/ToolDetailModal";
 import adminToolsHandler from "../api/admin-tools";
-import paddleWebhookHandler, { verifyPaddleSignature } from "../api/paddle-webhook";
+import paddleWebhookHandler, { hasProcessedEvent, verifyPaddleSignature } from "../api/paddle-webhook";
 import resendAudienceHandler from "../api/resend-audience";
 import sendEmailHandler from "../api/send-email";
 import { INITIAL_TOOLS } from "../src/data/mockTools";
@@ -68,7 +68,13 @@ import {
   submissionRejectionReason,
   TOOL_INSERT_COLUMNS,
 } from "../src/lib/submissions";
-import { getHostname, getPricingBadgeColor } from "../src/lib/toolDisplay";
+import {
+  getFaviconUrl,
+  getHostname,
+  getPricingBadgeColor,
+  getSafeHostname,
+  getSafeWebsiteUrl,
+} from "../src/lib/toolDisplay";
 import { buildCategoryOptions, matchesToolFilters, sortTools } from "../src/lib/toolFilters";
 import { getToolSlug } from "../src/lib/toolSlug";
 import { syncResendAudienceContact } from "../api/_lib/resendAudience";
@@ -190,6 +196,47 @@ check("slug comes from the name", getToolSlug({ id: "x", name: "Warp Terminal" }
 check("slug falls back to the id", getToolSlug({ id: "tool_123", name: "!!! " }) === "tool_123");
 check("hostname parses and fails safely",
   getHostname("https://www.warp.dev/pricing") === "www.warp.dev" && getHostname("nope") === null);
+// Listing URLs come straight from the submit form (and from Paddle's
+// custom_data), so anything that can execute or leak has to be refused before it
+// reaches an href/src.
+check("executable URL schemes are refused",
+  getSafeWebsiteUrl("javascript:alert(document.cookie)") === null &&
+  getSafeWebsiteUrl("  JaVaScRiPt:alert(1)") === null &&
+  getSafeWebsiteUrl("data:text/html,<script>alert(1)</script>") === null &&
+  getSafeWebsiteUrl("vbscript:msgbox(1)") === null &&
+  getSafeWebsiteUrl("blob:https://evil.test/1") === null &&
+  getSafeWebsiteUrl("file:///etc/passwd") === null &&
+  getSafeWebsiteUrl("about:blank") === null);
+check("a scheme smuggled through the host is refused",
+  getSafeWebsiteUrl("https://javascript:alert(1)") === null &&
+  getSafeWebsiteUrl("//javascript:alert(1)") === null);
+check("bare hosts are normalised into absolute https URLs",
+  getSafeWebsiteUrl("warp.dev") === "https://warp.dev/" &&
+  getSafeWebsiteUrl("www.warp.dev/pricing") === "https://www.warp.dev/pricing" &&
+  getSafeWebsiteUrl("http://warp.dev") === "http://warp.dev/");
+check("blank, dotless, internal and credentialed URLs are refused",
+  getSafeWebsiteUrl("") === null &&
+  getSafeWebsiteUrl("   ") === null &&
+  getSafeWebsiteUrl(undefined) === null &&
+  getSafeWebsiteUrl(null) === null &&
+  getSafeWebsiteUrl("localhost") === null &&
+  getSafeWebsiteUrl("https://") === null &&
+  getSafeWebsiteUrl("https://user:pass@warp.dev") === null &&
+  getSafeWebsiteUrl("mailto:someone@warp.dev") === null);
+check("a safe URL keeps its path and query",
+  getSafeWebsiteUrl("https://www.warp.dev/pricing?plan=pro") ===
+    "https://www.warp.dev/pricing?plan=pro");
+check("hostnames are only exposed for safe URLs",
+  getSafeHostname("https://www.warp.dev/pricing") === "www.warp.dev" &&
+  getSafeHostname("www.warp.dev/pricing") === "www.warp.dev" &&
+  getSafeHostname("javascript:alert(1)") === null &&
+  getSafeHostname("") === null);
+check("favicon URLs are only built for safe domains",
+  getFaviconUrl("https://www.warp.dev/pricing") ===
+    "https://www.google.com/s2/favicons?domain=www.warp.dev&sz=128" &&
+  getFaviconUrl("warp.dev", 64) === "https://www.google.com/s2/favicons?domain=warp.dev&sz=64" &&
+  getFaviconUrl("javascript:alert(1)") === null &&
+  getFaviconUrl("") === null);
 check("pricing badges cover every tier plus a default",
   getPricingBadgeColor("Free") !== getPricingBadgeColor("Paid") &&
   getPricingBadgeColor("Free").includes("emerald") &&
@@ -366,6 +413,46 @@ check("ToolDetailModal renders metrics, share options and the offer CTA",
   detailHtml.includes(getToolSlug(forSaleTool)));
 check("ToolDetailModal closes cleanly",
   render(<ToolDetailModal isOpen={false} tool={null} onClose={noop} onToggleUpvote={noop} />) === "");
+
+// A listing whose URL cannot be trusted must still render — without ever
+// emitting an executable/credentialed href or src.
+const poisonedTool: Tool = {
+  ...freeTool,
+  id: "poisoned-listing",
+  name: "Poisoned Listing",
+  website_url: "javascript:alert(document.cookie)",
+  icon_url: "data:text/html,<script>alert(1)</script>",
+};
+const poisonedCardHtml = render(<ToolCard tool={poisonedTool} onToggleUpvote={noop} />);
+check("a poisoned URL never reaches the card href or src",
+  !poisonedCardHtml.includes("javascript:") &&
+  !poisonedCardHtml.includes("data:text/html") &&
+  !poisonedCardHtml.includes("href=\"undefined\"") &&
+  !poisonedCardHtml.includes("<img"),
+  poisonedCardHtml.slice(0, 400));
+check("a listing with no usable URL falls back to an initials avatar",
+  poisonedCardHtml.includes("initial avatar"));
+const poisonedDetailHtml = render(
+  <ToolDetailModal isOpen tool={poisonedTool} onClose={noop} onToggleUpvote={noop} />,
+);
+check("the detail modal says so instead of offering a dead link",
+  poisonedDetailHtml.includes("Website unavailable") &&
+  !poisonedDetailHtml.includes("javascript:") &&
+  !poisonedDetailHtml.includes("data:text/html"));
+
+// Bare hosts are what people type into the submit form; they used to render as
+// href="warp.dev" (a link back to the directory itself) with no favicon.
+const bareHostTool: Tool = {
+  ...freeTool,
+  id: "bare-host-listing",
+  website_url: "warp.dev/pricing",
+  icon_url: undefined,
+};
+const bareHostHtml = render(<ToolCard tool={bareHostTool} onToggleUpvote={noop} />);
+check("a bare host still renders a working link and favicon",
+  bareHostHtml.includes('href="https://warp.dev/pricing"') &&
+  bareHostHtml.includes("https://www.google.com/s2/favicons?domain=warp.dev"),
+  bareHostHtml.slice(0, 400));
 
 const heroHtml = render(
   <Hero
@@ -587,6 +674,79 @@ check("free-text fields are HTML-escaped before they reach the inbox",
   String(supportMail?.html ?? "").includes("&lt;script&gt;") &&
   !String(supportMail?.html ?? "").includes("<script>"));
 
+// The webhook can be delivered twice for the same transaction, so the receipt
+// must carry a Resend idempotency key: Resend then collapses the second send and
+// the buyer sees one receipt. The key is per transaction, never per buyer, so
+// two different purchases still produce two receipts.
+const receiptHeaders: Array<Record<string, string>> = [];
+
+const collectHeaders = (value: unknown): Record<string, string> => {
+  const collected: Record<string, string> = {};
+  const push = (source: unknown): void => {
+    if (!source) return;
+    if (typeof (source as { entries?: unknown }).entries === "function") {
+      for (const [key, headerValue] of (source as { entries: () => Iterable<[string, string]> }).entries()) {
+        collected[key.toLowerCase()] = headerValue;
+      }
+      return;
+    }
+    if (Array.isArray(source)) {
+      for (const entry of source as Array<[string, string]>) {
+        collected[String(entry[0]).toLowerCase()] = String(entry[1]);
+      }
+      return;
+    }
+    if (typeof source === "object") {
+      for (const [key, headerValue] of Object.entries(source as Record<string, unknown>)) {
+        collected[key.toLowerCase()] = String(headerValue);
+      }
+    }
+  };
+  push(value);
+  return collected;
+};
+
+/** Resend stub that also records the outgoing request headers. */
+const receiptStub = async (
+  input: unknown,
+  init?: { body?: unknown; headers?: unknown },
+) => {
+  const requestLike = input as { headers?: unknown } | undefined;
+  const headers = collectHeaders(init?.headers);
+  if (Object.keys(headers).length === 0) {
+    Object.assign(headers, collectHeaders(requestLike?.headers));
+  }
+  receiptHeaders.push(headers);
+  return jsonResponse({ id: "email_2" });
+};
+
+const receiptResult = await withEnv(
+  { RESEND_API_KEY: "re_test", RESEND_FROM_EMAIL: "StackDirectory <noreply@example.com>" },
+  () =>
+    withFetch(receiptStub, () =>
+      invoke(sendEmailHandler, {
+        body: JSON.stringify({
+          type: "PAYMENT_RECEIPT",
+          customerEmail: "buyer@example.com",
+          toolName: "DocuVector AI",
+          toolSlug: "docuvector-ai",
+          amount: 5,
+          currency: "USD",
+          transactionId: "txn_receipt_1",
+        }),
+      }),
+    ),
+);
+check("a paid receipt is accepted",
+  receiptResult.status === 200 && receiptResult.body?.success === true,
+  JSON.stringify(receiptResult.body));
+check("a paid receipt carries a per-transaction Resend idempotency key",
+  receiptHeaders[receiptHeaders.length - 1]?.["idempotency-key"] ===
+    "stackdirectory-receipt-txn_receipt_1",
+  JSON.stringify(receiptHeaders));
+check("the receipt request is still authenticated against Resend",
+  String(receiptHeaders[receiptHeaders.length - 1]?.authorization ?? "").includes("re_test"));
+
 section("api/resend-audience.ts - submitted contact sync");
 
 const submittedAudienceCalls: Array<{ url: string; method: string; body: string }> = [];
@@ -661,12 +821,16 @@ const existingContactUpdated = await withEnv({
 ));
 const audienceUpdateCall = updatedAudienceCalls.find((call) => call.method === "PATCH");
 const audienceUpdatePayload = JSON.parse(audienceUpdateCall?.body ?? "{}") as Record<string, unknown>;
-check("an existing Resend contact is updated and restored to subscribed status",
+check("an existing Resend contact is updated without being re-subscribed",
   existingContactUpdated &&
   updatedAudienceCalls.some((call) => call.method === "GET") &&
   audienceUpdateCall?.url.includes("/audiences/aud_1/contacts/existing_contact") &&
   audienceUpdatePayload.first_name === "Updated Tool" &&
-  audienceUpdatePayload.unsubscribed === false,
+  // The contact returned above is `unsubscribed: true`. Flipping that flag back
+  // on a PATCH would silently re-subscribe someone who opted out (a CAN-SPAM /
+  // GDPR violation), so only the create path — a fresh submission, i.e. fresh
+  // consent — is allowed to set `unsubscribed: false`.
+  !("unsubscribed" in audienceUpdatePayload),
   JSON.stringify({ calls: updatedAudienceCalls, update: audienceUpdatePayload }));
 
 const unauthenticatedContactResult = await withEnv({
@@ -894,6 +1058,175 @@ check("non-completed events are acknowledged without upgrading anything",
   createdResult.status === 200 &&
   createdResult.body?.emailSent === false &&
   createdBackend.calls.length === 0);
+
+/* ------------------------------------------ webhook replay + price guards */
+
+section("api/paddle-webhook.ts - replay and price guards");
+
+/** `buildPaddleEvent`, but with an explicit (and mismatched) price id. */
+const buildPricedEvent = (
+  toolId: string,
+  transactionId: string,
+  priceId: string,
+): PaddleEvent => {
+  const parsed = JSON.parse(buildPaddleEvent(toolId, "https://priced.app").raw) as {
+    data: { id: string; items: Array<Record<string, unknown>> };
+  };
+  parsed.data.id = transactionId;
+  parsed.data.items = [
+    {
+      quantity: 1,
+      price: {
+        id: priceId,
+        description: "Featured Listing",
+        unit_price: { amount: 500, currency_code: "USD" },
+      },
+    },
+  ];
+  return { raw: JSON.stringify(parsed), toolId };
+};
+
+// Paddle retries a delivery until it receives a 2xx, so the exact same
+// transaction.completed can arrive more than once. `paidEvent` was already
+// processed above, so this delivery is a replay.
+const duplicateBackend = createBackendStub([{ id: paidToolId }]);
+const duplicateResult = await withEnv(productionEnv, () =>
+  withFetch(duplicateBackend.stub, () =>
+    invoke(paddleWebhookHandler, {
+      body: paidEvent.raw,
+      headers: { "paddle-signature": sign(paidEvent.raw) },
+    }),
+  ),
+);
+check("a replayed delivery is acknowledged without repeating the upgrade",
+  duplicateResult.status === 200 &&
+  duplicateResult.body?.duplicate === true &&
+  duplicateResult.body?.emailSent === false &&
+  duplicateBackend.calls.length === 0,
+  JSON.stringify(duplicateResult.body));
+check("the processed-event ledger is keyed by transaction + listing",
+  hasProcessedEvent(`txn_1:${paidToolId}`) &&
+  !hasProcessedEvent(`txn_1:${createToolId()}`));
+check("a replay still has to be signed",
+  (
+    await withEnv(productionEnv, () =>
+      withFetch(createBackendStub([]).stub, () =>
+        invoke(paddleWebhookHandler, {
+          body: paidEvent.raw,
+          headers: { "paddle-signature": "ts=1;h1=deadbeef" },
+        }),
+      ),
+    )
+  ).status === 401);
+
+// The receipt callback is a server-to-server call, so the Host header on the
+// incoming webhook must never be able to redirect it (and the buyer's details
+// with it) to an attacker's domain.
+const spoofEvent = buildPaddleEvent(createToolId(), "https://spoof.app");
+const spoofBackend = createBackendStub([
+  {
+    id: spoofEvent.toolId,
+    name: "DocuVector AI",
+    category: "AI & Machine Learning",
+    pricing_type: "Paid",
+    website_url: "https://spoof.app",
+  },
+]);
+const spoofResult = await withEnv({ ...productionEnv, APP_URL: undefined }, () =>
+  withFetch(spoofBackend.stub, () =>
+    invoke(paddleWebhookHandler, {
+      body: spoofEvent.raw,
+      headers: {
+        "paddle-signature": sign(spoofEvent.raw),
+        "x-forwarded-host": "evil.test",
+        host: "evil.test",
+      },
+    }),
+  ),
+);
+check("a spoofed Host header cannot redirect the receipt callback",
+  spoofResult.status === 200 &&
+  spoofBackend.calls.some((call) =>
+    call.url.startsWith("https://apps.stackbuildco.com/api/send-email"),
+  ) &&
+  !spoofBackend.calls.some((call) => call.url.includes("evil.test")),
+  JSON.stringify(spoofBackend.calls.map((call) => call.url)));
+
+// custom_data and the price both come from whichever checkout produced the
+// transaction, so a cheaper product pointed at this notification destination
+// must not be able to buy a Featured Listing.
+const cheapEvent = buildPricedEvent(createToolId(), "txn_cheap", "pri_not_featured");
+const cheapBackend = createBackendStub([{ id: cheapEvent.toolId }]);
+const cheapResult = await withEnv(
+  { ...productionEnv, PADDLE_FEATURED_PRICE_ID: "pri_featured" },
+  () =>
+    withFetch(cheapBackend.stub, () =>
+      invoke(paddleWebhookHandler, {
+        body: cheapEvent.raw,
+        headers: { "paddle-signature": sign(cheapEvent.raw) },
+      }),
+    ),
+);
+check("a transaction that paid for another price id never features a listing",
+  cheapResult.status === 200 &&
+  cheapResult.body?.ignored === "price_mismatch" &&
+  cheapResult.body?.emailSent === false &&
+  cheapResult.body?.created === false &&
+  cheapBackend.calls.length === 0,
+  JSON.stringify(cheapResult.body));
+check("an ignored price mismatch is not remembered as processed",
+  !hasProcessedEvent(`txn_cheap:${cheapEvent.toolId}`));
+
+const featuredEvent = buildPricedEvent(createToolId(), "txn_featured", "pri_featured");
+const featuredBackend = createBackendStub([
+  {
+    id: featuredEvent.toolId,
+    name: "DocuVector AI",
+    category: "AI & Machine Learning",
+    pricing_type: "Paid",
+    website_url: "https://priced.app",
+  },
+]);
+const featuredResult = await withEnv(
+  { ...productionEnv, PADDLE_FEATURED_PRICE_ID: "pri_featured" },
+  () =>
+    withFetch(featuredBackend.stub, () =>
+      invoke(paddleWebhookHandler, {
+        body: featuredEvent.raw,
+        headers: { "paddle-signature": sign(featuredEvent.raw) },
+      }),
+    ),
+);
+check("a transaction that paid the Featured price id is still upgraded",
+  featuredResult.status === 200 &&
+  featuredResult.body?.success === true &&
+  featuredResult.body?.ignored === undefined &&
+  (
+    JSON.parse(
+      featuredBackend.calls.find((call) => call.url.includes("id=eq."))?.body ?? "{}",
+    ) as Record<string, unknown>
+  ).is_featured === true,
+  JSON.stringify(featuredResult.body));
+
+// The public VITE_ variable is the one a deployment is most likely to have set
+// already, so it works as a fallback for the server-side price id.
+const fallbackEvent = buildPricedEvent(createToolId(), "txn_env_fallback", "pri_not_featured");
+const fallbackBackend = createBackendStub([{ id: fallbackEvent.toolId }]);
+const fallbackResult = await withEnv(
+  { ...productionEnv, PADDLE_FEATURED_PRICE_ID: undefined, VITE_PADDLE_PRICE_ID: "pri_featured" },
+  () =>
+    withFetch(fallbackBackend.stub, () =>
+      invoke(paddleWebhookHandler, {
+        body: fallbackEvent.raw,
+        headers: { "paddle-signature": sign(fallbackEvent.raw) },
+      }),
+    ),
+);
+check("VITE_PADDLE_PRICE_ID is accepted as the Featured price id",
+  fallbackResult.status === 200 &&
+  fallbackResult.body?.ignored === "price_mismatch" &&
+  fallbackBackend.calls.length === 0,
+  JSON.stringify(fallbackResult.body));
 
 section("Paid Featured flow - App <-> Paddle <-> webhook round trip");
 

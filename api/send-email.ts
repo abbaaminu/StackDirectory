@@ -241,7 +241,16 @@ export default async function handler(req: EmailRequest, res: ServerResponse) {
             html: `<h2>New support message</h2><p><strong>From:</strong> ${escapeHtml(payload.senderName)} (${escapeHtml(payload.senderEmail)})</p><p><strong>Category:</strong> ${escapeHtml(payload.category)}</p><p><strong>Message:</strong></p><p>${escapeHtml(payload.message).replace(/\n/g, "<br />")}</p>`,
           };
 
-    const { error } = await resend.emails.send(email);
+    // Paddle retries a webhook until it gets a 2xx and can also deliver the same
+    // event twice, so a receipt must be idempotent: the key is derived from the
+    // Paddle transaction id, and Resend drops the repeat instead of emailing the
+    // buyer a second receipt.
+    const sendOptions =
+      payload.type === "PAYMENT_RECEIPT"
+        ? { idempotencyKey: `stackdirectory-receipt-${payload.transactionId}` }
+        : undefined;
+
+    const { error } = await resend.emails.send(email, sendOptions);
     if (error) {
       console.error("Resend email failed:", error);
       res.statusCode = 502;

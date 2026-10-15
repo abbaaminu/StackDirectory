@@ -19,6 +19,7 @@ import {
   isAdminApiUnavailable,
 } from "../lib/adminTools";
 import { getToolSlug } from "../lib/toolSlug";
+import { getSafeWebsiteUrl } from "../lib/toolDisplay";
 import { readJsonArray, STORAGE_KEYS, writeJsonArray } from "../lib/localStore";
 import { useModalDismiss } from "../lib/useModalDismiss";
 
@@ -477,15 +478,33 @@ export const AdminQueueModal: React.FC<AdminQueueModalProps> = ({
                     <p className="text-[11px] text-zinc-500">
                       Submitted {new Date(tool.created_at).toLocaleString()}
                     </p>
-                    <a
-                      href={tool.website_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] text-amber-400/80 hover:underline flex items-center gap-1 font-mono"
-                    >
-                      <span>{tool.website_url}</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
+                    {(() => {
+                      // The queue shows raw, unmoderated submissions: a
+                      // `javascript:` or credentialed URL must be readable (the
+                      // admin has to see what was sent) but never clickable.
+                      const safeWebsiteUrl = getSafeWebsiteUrl(tool.website_url);
+                      if (!safeWebsiteUrl) {
+                        return (
+                          <span
+                            className="text-[11px] text-zinc-500 flex items-center gap-1 font-mono"
+                            title="This submission does not contain a safe web link, so it is not clickable."
+                          >
+                            {tool.website_url || "no website"}
+                          </span>
+                        );
+                      }
+                      return (
+                        <a
+                          href={safeWebsiteUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-amber-400/80 hover:underline flex items-center gap-1 font-mono"
+                        >
+                          <span>{tool.website_url}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      );
+                    })()}
                   </div>
 
                   <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">

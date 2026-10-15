@@ -14,6 +14,73 @@ export const getHostname = (url: string): string | null => {
   }
 };
 
+/**
+ * Schemes that must never reach an `href` or an `<img src>`. Listing URLs are
+ * user-supplied, so `javascript:` (or a `data:` payload) pasted into the
+ * submission form would otherwise become a clickable, executable link.
+ */
+const BLOCKED_SCHEMES = ["javascript:", "data:", "vbscript:", "file:", "blob:", "about:"];
+
+const HAS_SCHEME = /^https?:\/\//i;
+
+/**
+ * Absolute, safe http(s) URL for a listing link, or `null` when the value is
+ * unusable.
+ *
+ * Bare hosts (`warp.dev`, `www.warp.dev/pricing`) are what people actually type
+ * into the submission form, and Paddle's `custom_data.website_url` can carry
+ * one too. Without this normalisation `<a href="warp.dev">` resolved against
+ * the current page (a dead link) and the favicon lookup had nothing to parse.
+ * A hostname must contain a dot, which also rejects the
+ * `https://` + `javascript:alert(1)` smuggling trick.
+ */
+export const getSafeWebsiteUrl = (url?: string | null): string | null => {
+  const value = (url ?? "").trim();
+  if (!value) return null;
+
+  const lower = value.toLowerCase();
+  if (BLOCKED_SCHEMES.some((scheme) => lower.startsWith(scheme))) return null;
+
+  try {
+    const parsed = new URL(HAS_SCHEME.test(value) ? value : `https://${value}`);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    if (!parsed.hostname.includes(".")) return null;
+    // Reject embedded credentials: `https://user:pass@host` would hand a stored
+    // secret to anyone who clicks the listing, and a `mailto:` value would be
+    // silently rewritten into a credentialed https URL.
+    if (parsed.username || parsed.password) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+};
+
+/** Hostname of a safe listing URL, or `null` when the URL cannot be used. */
+export const getSafeHostname = (url?: string | null): string | null => {
+  const safeUrl = getSafeWebsiteUrl(url);
+  if (!safeUrl) return null;
+  try {
+    return new URL(safeUrl).hostname;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Google favicon service URL for a listing, or `null` when the URL has no
+ * usable domain.
+ *
+ * Centralised so the card, the detail modal and the submit form always request
+ * the same icon: the previous inline copies drifted (some encoded the hostname,
+ * some did not) and a `null` return lets a caller render an initials avatar
+ * instead of a broken image.
+ */
+export const getFaviconUrl = (url?: string | null, size = 128): string | null => {
+  const hostname = getSafeHostname(url);
+  if (!hostname) return null;
+  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=${size}`;
+};
+
 /** Tailwind classes for the pricing badge rendered on listing cards. */
 export const getPricingBadgeColor = (type: PricingType | string): string => {
   switch (type) {

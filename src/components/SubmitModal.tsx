@@ -22,6 +22,7 @@ import {
   isPaddleCheckoutCompleted,
 } from "../lib/paddleCheckout";
 import { getToolSlug } from "../lib/toolSlug";
+import { getFaviconUrl } from "../lib/toolDisplay";
 import { useModalDismiss } from "../lib/useModalDismiss";
 
 interface SubmitModalProps {
@@ -137,7 +138,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       ...current,
       website_url: value,
       name: current.name.trim() ? current.name : details.name,
-      icon_url: current.icon_url || `https://www.google.com/s2/favicons?domain=${details.domain}&sz=128`,
+      icon_url: current.icon_url || getFaviconUrl(details.domain) || "",
     }));
   };
 
@@ -147,7 +148,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       setFormData((current) => ({
         ...current,
         name: current.name.trim() ? current.name : details.name,
-        icon_url: `https://www.google.com/s2/favicons?domain=${details.domain}&sz=128`,
+        icon_url: getFaviconUrl(details.domain) || current.icon_url,
       }));
     }
   }, [formData.website_url, formData.icon_url]);
@@ -305,7 +306,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         description: manuallyEditedMetadataRef.current.has("description")
           ? current.description
           : metadata.description?.trim() || metadata.tagline?.trim() || current.tagline.trim(),
-        icon_url: metadata.iconUrl || current.icon_url || `https://www.google.com/s2/favicons?domain=${encodeURIComponent(details.domain)}&sz=128`,
+        icon_url: metadata.iconUrl || current.icon_url || getFaviconUrl(details.domain) || "",
         tech_stack: manuallyEditedMetadataRef.current.has("tech_stack")
           ? current.tech_stack
           : metadata.techStack?.join(", ") || "",
@@ -326,7 +327,7 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         description: manuallyEditedMetadataRef.current.has("description")
           ? current.description
           : current.tagline.trim() || `Learn more about ${details.domain}.`,
-        icon_url: current.icon_url || `https://www.google.com/s2/favicons?domain=${encodeURIComponent(details.domain)}&sz=128`,
+        icon_url: current.icon_url || getFaviconUrl(details.domain) || "",
       }));
       setAutoFillMessage("Could not read the site. Added domain-based details; please review them.");
     } finally {
@@ -408,11 +409,10 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
       tagline: formData.tagline.trim(),
       description: formData.description.trim() || formData.tagline.trim(),
       website_url: normalizedUrl,
-      icon_url: formData.icon_url || (
-        getUrlDetails(normalizedUrl)
-          ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(getUrlDetails(normalizedUrl)?.domain ?? "")}&sz=128`
-          : ""
-      ),
+      icon_url:
+        formData.icon_url ||
+        getFaviconUrl(getUrlDetails(normalizedUrl)?.domain) ||
+        "",
       category:
         formData.category === "All" ? "Developer Tools" : formData.category,
       pricing_type: formData.pricing_type,

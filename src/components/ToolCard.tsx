@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { Tool } from "../types/directory";
 import { handleVisitWebsite } from "../lib/trackToolClick";
-import { getHostname, getPricingBadgeColor } from "../lib/toolDisplay";
+import { getFaviconUrl, getPricingBadgeColor, getSafeWebsiteUrl } from "../lib/toolDisplay";
 import { FeaturedBadgeIcon } from "./icons/FeaturedBadgeIcon";
 
 interface ToolCardProps {
@@ -29,19 +29,21 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   onOpenDealRoom,
 }) => {
   const [isUpvoteAnimating, setIsUpvoteAnimating] = useState(false);
-  const domain = getHostname(tool.website_url);
-  const hasCustomIcon = Boolean(tool.icon_url?.trim());
-  const faviconUrl = domain
-    ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`
-    : null;
+  // Sanitised once: `website_url` and `icon_url` are both user-supplied, so
+  // they must never reach `href`/`src` unchecked, and bare hosts entered in the
+  // submit form still need to resolve to a real favicon.
+  const websiteUrl = getSafeWebsiteUrl(tool.website_url);
+  const customIconUrl = getSafeWebsiteUrl(tool.icon_url);
+  const hasCustomIcon = Boolean(customIconUrl);
+  const faviconUrl = getFaviconUrl(tool.website_url);
   const [logoSource, setLogoSource] = useState<"custom" | "favicon" | "initial">(
     hasCustomIcon ? "custom" : faviconUrl ? "favicon" : "initial",
   );
-  const logoSrc = logoSource === "custom" ? tool.icon_url?.trim() : faviconUrl;
+  const logoSrc = logoSource === "custom" ? customIconUrl : faviconUrl;
 
   useEffect(() => {
     setLogoSource(hasCustomIcon ? "custom" : faviconUrl ? "favicon" : "initial");
-  }, [tool.id, tool.icon_url, faviconUrl, hasCustomIcon]);
+  }, [tool.id, customIconUrl, faviconUrl, hasCustomIcon]);
 
   const handleUpvote = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -125,7 +127,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
 
           <div className="min-w-0">
             <a
-              href={tool.website_url}
+              href={websiteUrl ?? undefined}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => {
@@ -133,7 +135,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                 handleVisitWebsite(tool);
               }}
               className="text-base text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer transition-colors truncate block"
-              title={`Visit ${tool.website_url}`}
+              title={websiteUrl ? `Visit ${websiteUrl}` : tool.name}
             >
               {tool.name}
             </a>

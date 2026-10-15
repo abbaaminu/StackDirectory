@@ -31,6 +31,14 @@ type WebhookRequest = IncomingMessage & {
  * reported as `emailSent: false`, but never fails the webhook response, so
  * Paddle does not re-deliver a transaction that was already upgraded.
  *
+ * Two guards keep a replay from being profitable or destructive:
+ *   - when PADDLE_FEATURED_PRICE_ID (or VITE_PADDLE_PRICE_ID) is configured, a
+ *     transaction that paid for a *different* price id is acknowledged with
+ *     `ignored: "price_mismatch"` and never features a listing, and
+ *   - a delivery whose `transactionId:tool_id` pair was already processed is
+ *     acknowledged with `duplicate: true` instead of repeating the upgrade,
+ *     receipt email and audience sync (see `rememberProcessedEvent`).
+ *
  * Uses the SUPABASE_SERVICE_ROLE_KEY (server-side secret) so it bypasses
  * Row Level Security. Never expose this key to the browser/vite runtime.
  */
@@ -139,6 +147,63 @@ function isDuplicateKeyError(error: { message?: string; code?: string } | null |
   return error.code === "23505" || /duplicate key/i.test(error.message ?? "");
 }
 
+/**
+ * Best-effort replay ledger: `transactionId:listingId` → when it was processed.
+ *
+ * Paddle retries a delivery until it receives a 2xx and may also deliver the
+ * same event twice, and a signed body stays valid for five minutes, so a naive
+ * handler can run its side effects (receipt email, audience sync, and — if the
+ * listing was moderated away in between — re-creating a deleted row) twice.
+ *
+ * The ledger lives in the lambda instance, so a cold start forgets it; the
+ * receipt is additionally guarded by a Resend idempotency key. This closes the
+ * common duplicate-delivery case with no extra infrastructure.
+ */
+const PROCESSED_EVENTS = new Map<string, number>();
+const PROCESSED_EVENT_TTL_MS = 15 * 60 * 1000;
+const PROCESSED_EVENT_LIMIT = 500;
+
+/** Records an event key. Returns `false` when it was already processed. */
+function rememberProcessedEvent(key: string): boolean {
+  const now = Date.now();
+  for (const [existingKey, seenAt] of PROCESSED_EVENTS) {
+    if (now - seenAt > PROCESSED_EVENT_TTL_MS) PROCESSED_EVENTS.delete(existingKey);
+  }
+
+  const seenAt = PROCESSED_EVENTS.get(key);
+  if (seenAt !== undefined && now - seenAt <= PROCESSED_EVENT_TTL_MS) return false;
+
+  if (PROCESSED_EVENTS.size >= PROCESSED_EVENT_LIMIT) {
+    const oldestKey = PROCESSED_EVENTS.keys().next().value;
+    if (oldestKey !== undefined) PROCESSED_EVENTS.delete(oldestKey);
+  }
+  PROCESSED_EVENTS.set(key, now);
+  return true;
+}
+
+/** Exported so the replay guard can be exercised by scripts/verify.tsx. */
+export function hasProcessedEvent(key: string): boolean {
+  const seenAt = PROCESSED_EVENTS.get(key);
+  return seenAt !== undefined && Date.now() - seenAt <= PROCESSED_EVENT_TTL_MS;
+}
+
+/**
+ * The Paddle price id that buys a Featured Listing.
+ *
+ * `PADDLE_FEATURED_PRICE_ID` is the documented server-side name; the public
+ * `VITE_PADDLE_PRICE_ID` / `PADDLE_PRICE_ID` names are accepted so a deployment
+ * that already has one variable set still gets the check. Returns "" when the
+ * deployment has not configured any, in which case verification is skipped.
+ */
+function resolveFeaturedPriceId(): string {
+  return (
+    process.env.PADDLE_FEATURED_PRICE_ID?.trim() ||
+    process.env.PADDLE_PRICE_ID?.trim() ||
+    process.env.VITE_PADDLE_PRICE_ID?.trim() ||
+    ""
+  );
+}
+
 /** `tools.pricing_type` is constrained to these four values in Supabase. */
 const PRICING_TYPES = ["Free", "Freemium", "Paid", "Open Source"] as const;
 
@@ -200,11 +265,26 @@ function buildPaidListingRow(
   };
 }
 
-/** Absolute base URL of this deployment, used to call our own /api/send-email. */
+/**
+ * Absolute base URL of this deployment, used to call our own /api/send-email.
+ *
+ * `APP_URL` always wins. The forwarding headers are a development convenience
+ * only: in production this request arrives from Paddle, not from a browser, so
+ * `x-forwarded-host`/`host` are caller-controlled and a spoofed value would make
+ * us POST the buyer's receipt payload to a domain of the caller's choosing.
+ * Production therefore falls back to the deployed URL instead of the header.
+ */
 function resolveBaseUrl(req: WebhookRequest): string {
   const configured = process.env.APP_URL?.trim();
   if (configured && /^https?:\/\//i.test(configured)) {
     return configured.replace(/\/+$/, "");
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    console.warn(
+      "[Paddle Webhook] APP_URL is not configured - posting the receipt to the default production URL instead of the request Host header.",
+    );
+    return "https://apps.stackbuildco.com";
   }
 
   const forwardedHost = req.headers["x-forwarded-host"];
@@ -415,15 +495,75 @@ export default async function handler(
       },
     });
 
-    // 5. Upgrade the tool: approve + feature it (bypasses RLS via service role).
+    // 5. Someone paid. Two guards run first (price + replay), then the listing is
+    //    approved + featured (the service role bypasses RLS).
     //    `.select(...)` echoes the updated row so the receipt can quote the real
-    //    submission details without a second query.
-    //    `tools.status` is constrained to pending | approved | rejected (see
+    //    submission details without a second query, and `tools.status` is
+    //    constrained to pending | approved | rejected (see
     //    src/lib/supabase/database.ts) - writing "active" fails the column
     //    constraint and would abort the whole upgrade.
     const matchingValue = toolId.trim();
     const customWebsiteUrl = text(customData.website_url);
     const paddleCustomerId = text(data?.customer_id);
+    const transactionId = text(data?.id) || "unknown";
+
+    // 5a. Only a Featured Listing purchase may feature a listing. Paddle signs
+    //     the body, but `custom_data` and the price come from whichever checkout
+    //     produced the transaction, so a cheaper product pointed at this same
+    //     notification destination could otherwise be replayed as a Featured
+    //     purchase. When the expected price id is configured, the transaction
+    //     has to prove it paid for it.
+    const expectedPriceId = resolveFeaturedPriceId();
+    if (expectedPriceId) {
+      const itemPriceIds = (data?.items ?? [])
+        .map((item) => text(item?.price?.id))
+        .filter(Boolean);
+
+      if (itemPriceIds.length > 0 && !itemPriceIds.includes(expectedPriceId)) {
+        console.error(
+          `[Paddle Webhook] Transaction ${transactionId} paid for price(s) "${itemPriceIds.join(", ")}" but the Featured Listing price is "${expectedPriceId}" - ignoring the event.`,
+        );
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json");
+        res.end(
+          JSON.stringify({
+            success: true,
+            ignored: "price_mismatch",
+            emailSent: false,
+            created: false,
+          }),
+        );
+        return;
+      }
+
+      if (itemPriceIds.length === 0) {
+        console.warn(
+          `[Paddle Webhook] Transaction ${transactionId} carries no item price id - the Featured price check could not be applied.`,
+        );
+      }
+    } else {
+      console.warn(
+        "[Paddle Webhook] PADDLE_FEATURED_PRICE_ID is not configured - any completed transaction on this destination is treated as a Featured Listing purchase.",
+      );
+    }
+
+    // 5b. Acknowledge replays without re-running the side effects below.
+    if (!rememberProcessedEvent(`${transactionId}:${matchingValue}`)) {
+      console.warn(
+        `[Paddle Webhook] Duplicate delivery for transaction ${transactionId} (listing ${matchingValue}) - acknowledged without re-upgrading.`,
+      );
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      res.end(
+        JSON.stringify({
+          success: true,
+          duplicate: true,
+          emailSent: false,
+          created: false,
+        }),
+      );
+      return;
+    }
 
     const featuredUpgrade: Record<string, unknown> = {
       is_approved: true,
@@ -614,7 +754,7 @@ export default async function handler(
             toolSlug,
             amount: Math.round(amountMinor) / 100,
             currency,
-            transactionId: typeof data?.id === "string" ? data.id : "unknown",
+            transactionId,
             orderNumber: typeof data?.invoice_number === "string" ? data.invoice_number : "",
             itemDescription: data?.items?.[0]?.price?.description ?? "",
             planLabel: RECEIPT_PLAN_LABEL,

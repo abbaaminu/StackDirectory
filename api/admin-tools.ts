@@ -136,6 +136,9 @@ function respond(
 ): void {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
+  // The queue carries unapproved submissions and the caller's role, so neither
+  // the CDN nor the browser may cache a response.
+  res.setHeader("Cache-Control", "no-store");
   res.end(JSON.stringify(body));
 }
 
@@ -289,13 +292,35 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
     }
 
     if (action === "list") {
-      const { data, error } = await supabaseAdmin
+      // Ordering the queue by `created_at` is only a nicety, but `public.tools`
+      // is live and has already drifted from this code once (an unmapped column
+      // made Postgres answer 42703 and killed the whole request). A row that
+      // cannot be ordered is still a row an admin needs to moderate, so the
+      // query is retried without the clause instead of 500-ing the queue.
+      let { data, error } = await supabaseAdmin
         .from("tools")
         .select("*")
         .order("created_at", { ascending: false });
+
       if (error) {
-        console.error("[Admin Tools] Queue fetch failed:", error.message);
-        respond(res, 500, { success: false, error: "Supabase rejected the queue request." });
+        console.warn(
+          "[Admin Tools] Ordered queue fetch failed, retrying unordered:",
+          error.code ?? "",
+          error.message,
+        );
+        ({ data, error } = await supabaseAdmin.from("tools").select("*"));
+      }
+
+      if (error) {
+        console.error(
+          "[Admin Tools] Queue fetch failed:",
+          error.code ?? "",
+          error.message,
+        );
+        respond(res, 500, {
+          success: false,
+          error: `Supabase rejected the queue request (${error.code ?? "unknown"}): ${error.message}`,
+        });
         return;
       }
       respond(res, 200, { success: true, tools: data ?? [] });
@@ -312,7 +337,11 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
         .select(COLUMNS);
 
       if (error) {
-        console.error("[Admin Tools] Delete failed:", error.message);
+        console.error(
+          "[Admin Tools] Delete failed:",
+          error.code ?? "",
+          error.message,
+        );
         const invalidId = (error as { code?: string }).code === "22P02";
         respond(res, invalidId ? 400 : 500, {
           success: false,
@@ -337,6 +366,7 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
       return;
     }
 
+    const updateErrorTag = "Supabase rejected the update.";
     const { data: updatedRows, error } = await supabaseAdmin
       .from("tools")
       .update(changes as never)
@@ -344,8 +374,18 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
       .select(action === "approve" ? `${COLUMNS}, seller_contact` : COLUMNS);
 
     if (error) {
-      console.error(`[Admin Tools] ${action} failed:`, error.message);
-      respond(res, 500, { success: false, error: "Supabase rejected the update." });
+      console.error(
+        `[Admin Tools] ${action} failed:`,
+        error.code ?? "",
+        error.message,
+      );
+      const invalidId = (error as { code?: string }).code === "22P02";
+      respond(res, invalidId ? 400 : 500, {
+        success: false,
+        error: invalidId
+          ? "That listing id is not a valid Supabase uuid, so it cannot be updated."
+          : `${updateErrorTag} (${error.code ?? "unknown"}): ${error.message}`,
+      });
       return;
     }
 
@@ -365,7 +405,10 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
         seller_contact?: unknown;
       };
       if (typeof approvedTool.name === "string" && typeof approvedTool.id === "string") {
-        await Promise.all([
+        // `allSettled`, not `all`: the row has already been approved, so a
+        // transient Resend failure must not turn a successful moderation action
+        // into a 500 that pushes the admin to approve the listing twice.
+        const [emailResult, audienceResult] = await Promise.allSettled([
           sendApprovalNotification({
             id: approvedTool.id,
             name: approvedTool.name,
@@ -378,6 +421,12 @@ export default async function handler(req: AdminRequest, res: ServerResponse) {
             approvedTool.name,
           ),
         ]);
+        if (emailResult.status === "rejected") {
+          console.error("[Admin Tools] Approval email rejected:", emailResult.reason);
+        }
+        if (audienceResult.status === "rejected") {
+          console.error("[Admin Tools] Audience sync rejected:", audienceResult.reason);
+        }
       }
     }
 

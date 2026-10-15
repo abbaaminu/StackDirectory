@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Check, ChevronUp, Copy, ExternalLink, Handshake, Heart, Share2, Trash2, X } from "lucide-react";
 import type { Tool } from "../types/directory";
 import { handleVisitWebsite } from "../lib/trackToolClick";
-import { getHostname } from "../lib/toolDisplay";
+import { getFaviconUrl, getSafeHostname, getSafeWebsiteUrl } from "../lib/toolDisplay";
 import { getToolSlug } from "../lib/toolSlug";
 import { useModalDismiss } from "../lib/useModalDismiss";
 
@@ -40,12 +40,13 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
 
   useEffect(() => {
     if (tool) {
-      const hostname = getHostname(tool.website_url) ?? "";
-      const favicon = hostname
-        ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=128`
-        : "";
-      setLogoSource(tool.icon_url?.trim() || favicon);
-      setLogoFailed(!tool.icon_url?.trim() && !favicon);
+      // `icon_url` and `website_url` are user-supplied: both are sanitised
+      // before they can reach `src`, so a `javascript:`/`data:` value cannot
+      // execute, and a broken icon falls back to the favicon service.
+      const customIcon = getSafeWebsiteUrl(tool.icon_url);
+      const favicon = getFaviconUrl(tool.website_url);
+      setLogoSource(customIcon || favicon || "");
+      setLogoFailed(!customIcon && !favicon);
       setIsCopied(false);
       setIsShareMenuOpen(false);
       setShareNotice("");
@@ -89,10 +90,9 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
 
   if (!isOpen || !tool) return null;
 
-  const hostname = getHostname(tool.website_url) ?? "";
-  const fallback = hostname
-    ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=128`
-    : "";
+  const websiteUrl = getSafeWebsiteUrl(tool.website_url);
+  const hostname = getSafeHostname(tool.website_url) ?? "";
+  const fallback = getFaviconUrl(tool.website_url) ?? "";
   const shareTitle = `${tool.name} - StackDirectory`;
   const shareText = `Check out ${tool.name} on StackDirectory!`;
 
@@ -251,9 +251,17 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
 
         <div className="mt-7 flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-3">
-          <a href={tool.website_url} target="_blank" rel="noopener noreferrer" onClick={() => handleVisitWebsite(tool)} className="inline-flex items-center gap-2 text-sm font-bold text-emerald-600 hover:underline">
-            Visit {hostname || "website"} <ExternalLink className="h-4 w-4" />
-          </a>
+          {websiteUrl ? (
+            <a href={websiteUrl} target="_blank" rel="noopener noreferrer" onClick={() => handleVisitWebsite(tool)} className="inline-flex items-center gap-2 text-sm font-bold text-emerald-600 hover:underline">
+              Visit {hostname || "website"} <ExternalLink className="h-4 w-4" />
+            </a>
+          ) : (
+            // Submissions can carry an unusable URL (blank, or a scheme we
+            // refuse to navigate to). Saying so beats a dead/unsafe link.
+            <span className="inline-flex items-center gap-2 text-sm font-bold text-slate-400">
+              Website unavailable <ExternalLink className="h-4 w-4" />
+            </span>
+          )}
           <span className="rounded-md bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
             {tool.click_count || 0} referral clicks
           </span>

@@ -45,7 +45,10 @@ export async function syncResendAudienceContact(
       id: existingContact.id,
       audienceId,
       firstName,
-      unsubscribed: false,
+      // Deliberately NOT setting `unsubscribed: false` here. Flipping the flag
+      // back would silently re-subscribe someone who opted out of the list
+      // (CAN-SPAM/GDPR violation). Only the create path — i.e. a fresh form
+      // submission, which is the consent — may set it.
     });
     if (updateError) {
       console.warn("Failed to sync contact to Resend Audience:", updateError);
