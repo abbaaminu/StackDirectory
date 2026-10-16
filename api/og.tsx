@@ -2,6 +2,12 @@ import { ImageResponse } from '@vercel/og';
 
 import { OG_TEXT_LIMITS, ogText } from "./_lib/ogText.js";
 
+// Rendered on the Node.js runtime on purpose: `@vercel/og` is pinned to 0.11.x
+// (see package.json) because the 1.x builds ship a Node entry whose bundled
+// `require("fs")` shim (via harfbuzzjs) throws `Dynamic require of "fs" is not
+// supported` during module evaluation on Node.js runtimes, killing the function
+// with a 500. The Edge runtime is not an option for this file either - Vercel
+// rejects `@vercel/og` as an "unsupported module" in Edge Functions.
 export const config = {
   runtime: 'nodejs',
 };
