@@ -7,9 +7,9 @@ import {
   readServiceRoleConfig,
   resolveSessionUser,
   type ServiceRoleClient,
-} from "./_lib/adminAuth";
-import { escapeHtml, isValidEmail, sanitizeHeaderValue } from "./_lib/email";
-import { clientIpFromRequest, consumeRateLimit } from "./_lib/rateLimit";
+} from "./_lib/adminAuth.js";
+import { escapeHtml, isValidEmail, sanitizeHeaderValue } from "./_lib/email.js";
+import { clientIpFromRequest, consumeRateLimit } from "./_lib/rateLimit.js";
 
 type EmailRequest = IncomingMessage & {
   body?: unknown;

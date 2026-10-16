@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { clientIpFromRequest, consumeRateLimit } from "./_lib/rateLimit";
-import { resolvePublicUrl } from "./_lib/publicUrl";
+import { clientIpFromRequest, consumeRateLimit } from "./_lib/rateLimit.js";
+import { resolvePublicUrl } from "./_lib/publicUrl.js";
 import {
   avatarSvg,
   extractIconHref,
@@ -8,7 +8,7 @@ import {
   normalizeContentType,
   normalizeIconDomain,
   pickIconSize,
-} from "./_lib/toolIcon";
+} from "./_lib/toolIcon.js";
 
 /**
  * First-party icon endpoint (Vercel Serverless Function).

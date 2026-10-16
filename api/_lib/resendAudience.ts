@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { isValidEmail } from "./email";
+import { isValidEmail } from "./email.js";
 
 /** Adds a contact to the configured Audience, updating it when it already exists. */
 export async function syncResendAudienceContact(

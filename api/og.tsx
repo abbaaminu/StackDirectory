@@ -1,6 +1,6 @@
 import { ImageResponse } from '@vercel/og';
 
-import { OG_TEXT_LIMITS, ogText } from "./_lib/ogText";
+import { OG_TEXT_LIMITS, ogText } from "./_lib/ogText.js";
 
 export const config = {
   runtime: 'nodejs',

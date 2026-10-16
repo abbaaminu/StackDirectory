@@ -5,9 +5,9 @@ import {
   isAdminRecord,
   readBearerToken,
   type ServiceRoleClient,
-} from "./_lib/adminAuth";
-import { escapeHtml } from "./_lib/email";
-import { syncResendAudienceContact } from "./_lib/resendAudience";
+} from "./_lib/adminAuth.js";
+import { escapeHtml } from "./_lib/email.js";
+import { syncResendAudienceContact } from "./_lib/resendAudience.js";
 
 /**
  * Admin moderation endpoint — Vercel Serverless Function

@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { IncomingMessage, ServerResponse } from "http";
-import { syncResendAudienceContact } from "./_lib/resendAudience";
+import { syncResendAudienceContact } from "./_lib/resendAudience.js";
 
 type WebhookRequest = IncomingMessage & {
   body?: unknown;

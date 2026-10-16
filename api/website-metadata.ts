@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { resolvePublicUrl } from "./_lib/publicUrl";
-import { clientIpFromRequest, consumeRateLimit } from "./_lib/rateLimit";
+import { resolvePublicUrl } from "./_lib/publicUrl.js";
+import { clientIpFromRequest, consumeRateLimit } from "./_lib/rateLimit.js";
 
 type MetadataRequest = IncomingMessage & { body?: unknown };
 

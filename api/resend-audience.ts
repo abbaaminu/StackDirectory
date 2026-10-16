@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { IncomingMessage, ServerResponse } from "http";
-import { syncResendAudienceContact } from "./_lib/resendAudience";
+import { syncResendAudienceContact } from "./_lib/resendAudience.js";
 
 type AudienceRequest = IncomingMessage & { body?: unknown };
 
