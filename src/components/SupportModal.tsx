@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Check, Clipboard, LoaderCircle, Mail, X } from "lucide-react";
 import { isValidEmail } from "../lib/validation";
 import { useModalDismiss } from "../lib/useModalDismiss";
@@ -17,6 +17,32 @@ export const SupportModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSent, setIsSent] = useState(false);
   const [formError, setFormError] = useState("");
+  /** Pending "Copied!" reset timer. */
+  const copyTimerRef = useRef<number | null>(null);
+
+  /**
+   * Escape and the backdrop close this modal without the close button, so the
+   * confirmation/error state is cleared whenever it is no longer open. Without
+   * this a reopened modal greeted the visitor with the previous "Message sent!"
+   * banner instead of the form.
+   */
+  useEffect(() => {
+    if (isOpen) return;
+    setIsSent(false);
+    setFormError("");
+    setIsCopied(false);
+  }, [isOpen]);
+
+  // No timer may outlive the component that owns it.
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
+    },
+    [],
+  );
 
   // Escape and the scroll lock are shared with the other overlay modals.
   useModalDismiss(isOpen, onClose);
@@ -27,7 +53,13 @@ export const SupportModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
     try {
       await navigator.clipboard.writeText(SUPPORT_EMAIL);
       setIsCopied(true);
-      window.setTimeout(() => setIsCopied(false), 2000);
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = window.setTimeout(() => {
+        copyTimerRef.current = null;
+        setIsCopied(false);
+      }, 2000);
     } catch {
       setIsCopied(false);
     }

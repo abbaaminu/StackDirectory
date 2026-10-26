@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   X,
   DollarSign,
@@ -44,6 +44,27 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  /** Blank form and no confirmation - shared by every close path. */
+  const resetOfferForm = () => {
+    setBuyerName("");
+    setBuyerEmail("");
+    setOfferAmount("");
+    setMessage("");
+    setErrorMsg(null);
+    setHasSubmitted(false);
+  };
+
+  /**
+   * Escape, the backdrop and App switching this modal to another listing all
+   * close it without going through the close button, which used to be the only
+   * place the form was cleared. A reopened modal could therefore still show the
+   * previous "Offer submitted!" receipt with the last buyer's contact details.
+   * Resetting on every close (and on every listing change) covers all paths.
+   */
+  useEffect(() => {
+    if (!isOpen) resetOfferForm();
+  }, [isOpen, tool?.id]);
 
   // Escape and the scroll lock behave exactly like the other overlay modals.
   useModalDismiss(isOpen, onClose);
@@ -129,12 +150,7 @@ export const AcquisitionModal: React.FC<AcquisitionModalProps> = ({
 
   const handleClose = () => {
     // Reset form state when closing so it's fresh next time
-    setBuyerName("");
-    setBuyerEmail("");
-    setOfferAmount("");
-    setMessage("");
-    setErrorMsg(null);
-    setHasSubmitted(false);
+    resetOfferForm();
     onClose();
   };
 

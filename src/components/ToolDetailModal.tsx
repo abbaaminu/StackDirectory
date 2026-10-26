@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronUp, Copy, ExternalLink, Handshake, Heart, Share2, Trash2, X } from "lucide-react";
 import type { Tool } from "../types/directory";
 import { handleVisitWebsite } from "../lib/trackToolClick";
@@ -47,9 +47,27 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
   const [shareNotice, setShareNotice] = useState("");
   const [confirmAdminDelete, setConfirmAdminDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  /** Pending "Link copied" reset timer owned by this modal. */
+  const copyTimerRef = useRef<number | null>(null);
 
   // Escape closes the detail modal and freezes the grid scrolling behind it.
   useModalDismiss(isOpen, onClose);
+
+  /**
+   * Every close path ends here (Escape, backdrop, close button), so the share
+   * menu and the "copied" flag cannot survive into the next time this modal is
+   * opened for the same listing, and no pending timer outlives the modal.
+   */
+  useEffect(() => {
+    if (isOpen) return;
+    setIsShareMenuOpen(false);
+    setIsCopied(false);
+    setShareNotice("");
+    if (copyTimerRef.current !== null) {
+      window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (tool) {
@@ -104,7 +122,15 @@ export const ToolDetailModal: React.FC<ToolDetailModalProps> = ({
       await navigator.clipboard.writeText(shareUrl);
       setIsCopied(true);
       setShareNotice("Link copied to clipboard!");
-      window.setTimeout(() => setIsCopied(false), 2000);
+      // One timer at a time: a second copy click must not let the first
+      // timer's reset fire 2s early.
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = window.setTimeout(() => {
+        copyTimerRef.current = null;
+        setIsCopied(false);
+      }, 2000);
     } catch {
       setIsCopied(false);
       setShareNotice("Could not copy link.");

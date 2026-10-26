@@ -22,7 +22,7 @@ import {
   isPaddleCheckoutCompleted,
 } from "../lib/paddleCheckout";
 import { getToolSlug } from "../lib/toolSlug";
-import { getFaviconUrl } from "../lib/toolDisplay";
+import { getFaviconUrl, getHostname, getSafeWebsiteUrl } from "../lib/toolDisplay";
 import { isValidEmail } from "../lib/validation";
 import { useModalDismiss } from "../lib/useModalDismiss";
 
@@ -115,18 +115,22 @@ export const SubmitModal: React.FC<SubmitModalProps> = ({
         ? 2
         : 1;
 
+  /**
+   * URL parts the form autofills from. Parsing is delegated to
+   * `lib/toolDisplay` so the submit form accepts exactly the URLs the rest of
+   * the app is willing to link to: that helper already rejects `javascript:` /
+   * `data:` values, hosts without a dot and credentialed URLs such as
+   * `https://user:pass@example.com`, which the local parser here used to accept.
+   */
   const getUrlDetails = (value: string) => {
-    try {
-      const normalized = value.match(/^https?:\/\//i) ? value : `https://${value}`;
-      const url = new URL(normalized);
-      if (!url.hostname.includes(".")) return null;
-      const domain = url.hostname.replace(/^www\./i, "");
-      const firstLabel = domain.split(".")[0].replace(/[-_]+/g, " ");
-      const name = firstLabel.replace(/\b\w/g, (letter) => letter.toUpperCase());
-      return { normalized: url.toString(), domain, name };
-    } catch {
-      return null;
-    }
+    const normalized = getSafeWebsiteUrl(value);
+    if (!normalized) return null;
+    const hostname = getHostname(normalized);
+    if (!hostname) return null;
+    const domain = hostname.replace(/^www\./i, "");
+    const firstLabel = domain.split(".")[0].replace(/[-_]+/g, " ");
+    const name = firstLabel.replace(/\b\w/g, (letter) => letter.toUpperCase());
+    return { normalized, domain, name };
   };
 
   const applyUrlDefaults = (value: string) => {

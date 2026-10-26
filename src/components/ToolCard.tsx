@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ChevronUp,
   Handshake,
@@ -37,6 +37,8 @@ export const ToolCard: React.FC<ToolCardProps> = ({
   onOpenDealRoom,
 }) => {
   const [isUpvoteAnimating, setIsUpvoteAnimating] = useState(false);
+  /** Pending "stop the pop animation" timer for the upvote button. */
+  const upvoteTimerRef = useRef<number | null>(null);
   // Sanitised once: `website_url` and `icon_url` are both user-supplied, so
   // they must never reach `href`/`src` unchecked, and bare hosts entered in the
   // submit form still need to resolve to a real favicon.
@@ -54,11 +56,30 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     setLogoSource(initialToolImageSource(hasCustomIcon, Boolean(faviconUrl)));
   }, [tool.id, customIconUrl, faviconUrl, hasCustomIcon]);
 
+  // The animation timer belongs to the card: it is cleared on unmount (never
+  // set state on a gone card) and before re-arming, so fast clicks cannot leave
+  // two timers racing over the same flag.
+  useEffect(
+    () => () => {
+      if (upvoteTimerRef.current !== null) {
+        window.clearTimeout(upvoteTimerRef.current);
+        upvoteTimerRef.current = null;
+      }
+    },
+    [],
+  );
+
   const handleUpvote = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsUpvoteAnimating(true);
     onToggleUpvote(tool.id);
-    setTimeout(() => setIsUpvoteAnimating(false), 300);
+    if (upvoteTimerRef.current !== null) {
+      window.clearTimeout(upvoteTimerRef.current);
+    }
+    upvoteTimerRef.current = window.setTimeout(() => {
+      upvoteTimerRef.current = null;
+      setIsUpvoteAnimating(false);
+    }, 300);
   };
 
   return (
@@ -66,9 +87,27 @@ export const ToolCard: React.FC<ToolCardProps> = ({
       id={`tool-card-${tool.id}`}
       role="button"
       tabIndex={0}
-      onClick={() => onOpenDetails?.(tool)}
+      onClick={(event) => {
+        // The whole card opens the listing, but a click that started on one of
+        // its own controls (upvote, save, Make Offer, Request Details) belongs
+        // to that control - those handlers also stop propagation, this is the
+        // belt-and-braces guard for keyboard-generated clicks.
+        const target = event.target as HTMLElement | null;
+        if (target && target !== event.currentTarget && target.closest("button, a")) {
+          return;
+        }
+        onOpenDetails?.(tool);
+      }}
       onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") onOpenDetails?.(tool);
+        // Keydown from a nested control bubbles up here as well: Enter on "Make
+        // Offer" used to open the details modal *and* fire the button. Only the
+        // card's own focus target may open the listing, and Space must not
+        // scroll the page behind it.
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+          event.preventDefault();
+          onOpenDetails?.(tool);
+        }
       }}
       className={`group relative bg-white border border-slate-200/80 hover:border-amber-400/90 shadow-xs hover:shadow-md rounded-2xl p-4 flex items-start gap-3.5 transition-all duration-200 ${
         tool.is_for_sale || tool.is_featured ? "border-amber-400/70" : ""

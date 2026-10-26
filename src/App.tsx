@@ -96,9 +96,13 @@ export default function App() {
 
   const openToolDetails = (tool: Tool) => {
     setSelectedDetailTool(tool);
+    const slug = getToolSlug(tool);
     const url = new URL(window.location.href);
-    url.searchParams.set("tool", getToolSlug(tool));
-    window.history.pushState({ tool: getToolSlug(tool) }, "", url);
+    // Re-opening the listing that is already deep-linked must not stack another
+    // identical history entry (Back would then need several presses to leave it).
+    if (url.searchParams.get("tool") === slug) return;
+    url.searchParams.set("tool", slug);
+    window.history.pushState({ tool: slug }, "", url);
   };
 
   const closeToolDetails = () => {
@@ -107,14 +111,24 @@ export default function App() {
     // history entry, so pushing another one here left the visitor with
     // [.., ?tool=x, /] - pressing Back immediately reopened the modal they had
     // just closed. Replacing the entry drops the deep link without trapping them
-    // in a Back loop.
-    window.history.replaceState({}, "", window.location.pathname);
+    // in a Back loop, and only the `tool` param is removed so campaign/UTM
+    // params on the original URL survive the open/close round trip.
+    const url = new URL(window.location.href);
+    url.searchParams.delete("tool");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   };
 
   useEffect(() => {
     const syncToolFromUrl = () => {
       const toolParam = new URLSearchParams(window.location.search).get("tool");
-      setSelectedDetailTool(toolParam ? getToolFromUrl(toolParam, tools) : null);
+      setSelectedDetailTool((current) => {
+        const nextTool = toolParam ? getToolFromUrl(toolParam, tools) : null;
+        // Keep the open object when the deep link still points at it: every
+        // `tools` refresh (upvote, favorite, admin toggle) would otherwise hand
+        // the modal a new object and reset its own state - the logo source
+        // chain and the open share menu - on an unrelated update.
+        return nextTool && current?.id === nextTool.id ? current : nextTool;
+      });
     };
 
     syncToolFromUrl();
@@ -371,7 +385,16 @@ export default function App() {
    */
   const handleToolDeleted = (toolId: string) => {
     setTools((current) => current.filter((tool) => tool.id !== toolId));
+    const wasOpenInDetailModal = selectedDetailTool?.id === toolId;
     setSelectedDetailTool((current) => (current?.id === toolId ? null : current));
+    // Strip the `?tool=` deep link as well: it points at a row that no longer
+    // exists, so leaving it behind would keep a dead link in the address bar and
+    // in the visitor's history.
+    if (wasOpenInDetailModal) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("tool");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    }
     showToast("🗑️ Listing deleted from Supabase.");
   };
 
@@ -853,7 +876,10 @@ export default function App() {
         onToggleFavorite={handleToggleFavorite}
         onAdminDelete={handleAdminDeleteTool}
         onOpenAcquisition={(tool) => {
-          setSelectedDetailTool(null);
+          // `closeToolDetails` rather than a bare state reset: it also drops the
+          // `?tool=` deep link, which would otherwise reopen this listing on top
+          // of the offer form the next time the visitor pressed Back.
+          closeToolDetails();
           setSelectedAcquisitionTool(tool);
         }}
       />

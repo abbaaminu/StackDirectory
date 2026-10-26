@@ -3,7 +3,7 @@
  * `transaction.completed` delivery in the browser; the real handler lives in
  * `api/paddle-webhook.ts` and is now signature-verified.
  */
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   X,
   Webhook,
@@ -63,9 +63,22 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
   const [webhookResponse, setWebhookResponse] =
     useState<SimulatedWebhookResponse | null>(null);
   const [copied, setCopied] = useState(false);
+  /** Pending "Copied!" reset timer, owned by this modal. */
+  const copyTimerRef = useRef<number | null>(null);
 
   // Escape closes the simulator and the page behind it stops scrolling.
   useModalDismiss(isOpen, onClose);
+
+  // No "Copied!" timer may outlive the simulator that scheduled it.
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
+    },
+    [],
+  );
 
   if (!isOpen) return null;
 
@@ -135,7 +148,11 @@ export const PaddleWebhookSimulator: React.FC<PaddleWebhookSimulatorProps> = ({
   const handleCopyPayload = () => {
     navigator.clipboard.writeText(JSON.stringify(mockPayload, null, 2));
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => {
+      copyTimerRef.current = null;
+      setCopied(false);
+    }, 2000);
   };
 
   return (

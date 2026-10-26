@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Eye,
@@ -36,6 +36,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<AuthMode>(initialMode);
+  /** Pending "demo sign-in" timer, cleared on close and on unmount. */
+  const demoTimerRef = useRef<number | null>(null);
 
   const isLogin = mode === "login";
 
@@ -44,9 +46,36 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (isOpen) setMode(initialMode);
   }, [initialMode, isOpen]);
 
+  /**
+   * Closing the modal (Escape, backdrop or the close button) must not leave a
+   * stale error banner or a queued demo sign-in behind: the timer below used to
+   * sign the demo user in - and toast about it - seconds after the visitor had
+   * already dismissed the form.
+   */
+  useEffect(() => {
+    if (isOpen) return;
+    setError(null);
+    setSubmitting(false);
+    if (demoTimerRef.current !== null) {
+      window.clearTimeout(demoTimerRef.current);
+      demoTimerRef.current = null;
+    }
+  }, [isOpen]);
+
+  // Unmount safety net for the same timer.
+  useEffect(
+    () => () => {
+      if (demoTimerRef.current !== null) {
+        window.clearTimeout(demoTimerRef.current);
+        demoTimerRef.current = null;
+      }
+    },
+    [],
+  );
+
   // Lock body scroll & close on Escape while the modal is open. Shared with the
-  // other modals so the previous overflow value is always restored (a modal
-  // opened on top of another one must not unlock the page behind it).
+  // other modals: the scroll lock is reference-counted and Escape only closes
+  // the innermost overlay, so the sign-in prompt can sit on top of a listing.
   useModalDismiss(isOpen, onClose);
 
   if (!isOpen) return null;
@@ -67,7 +96,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setSubmitting(true);
     if (!isSupabaseConfigured || !supabase) {
-      window.setTimeout(() => {
+      if (demoTimerRef.current !== null) {
+        window.clearTimeout(demoTimerRef.current);
+      }
+      demoTimerRef.current = window.setTimeout(() => {
+        demoTimerRef.current = null;
         onAuthenticated?.();
         onToast?.("Demo account signed in locally.");
         setSubmitting(false);

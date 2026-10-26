@@ -2,7 +2,7 @@
  * SHOWCASE-ONLY: unreferenced by App.tsx. Renders the Next.js blueprint
  * corpus in `src/data/nextjsCodebase.ts` for demonstration purposes.
  */
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   X,
   Copy,
@@ -28,9 +28,23 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
   const [activeFileIndex, setActiveFileIndex] = useState(0);
   const [copiedFileIndex, setCopiedFileIndex] = useState<number | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
+  /** Pending "Copied" reset timers, owned by this modal. */
+  const copyFileTimerRef = useRef<number | null>(null);
+  const copyAllTimerRef = useRef<number | null>(null);
 
   // Escape closes the viewer and the scroll lock matches the other overlays.
   useModalDismiss(isOpen, onClose);
+
+  // No "Copied" timer may outlive the viewer that scheduled it.
+  useEffect(
+    () => () => {
+      if (copyFileTimerRef.current !== null) window.clearTimeout(copyFileTimerRef.current);
+      if (copyAllTimerRef.current !== null) window.clearTimeout(copyAllTimerRef.current);
+      copyFileTimerRef.current = null;
+      copyAllTimerRef.current = null;
+    },
+    [],
+  );
 
   if (!isOpen) return null;
 
@@ -39,7 +53,12 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
   const handleCopySingle = (code: string, index: number) => {
     navigator.clipboard.writeText(code);
     setCopiedFileIndex(index);
-    setTimeout(() => setCopiedFileIndex(null), 2000);
+    // Re-arming replaces the pending timer instead of stacking a second one.
+    if (copyFileTimerRef.current !== null) window.clearTimeout(copyFileTimerRef.current);
+    copyFileTimerRef.current = window.setTimeout(() => {
+      copyFileTimerRef.current = null;
+      setCopiedFileIndex(null);
+    }, 2000);
   };
 
   const handleCopyAll = () => {
@@ -50,7 +69,11 @@ export const CodeViewerModal: React.FC<CodeViewerModalProps> = ({
 
     navigator.clipboard.writeText(allCode);
     setCopiedAll(true);
-    setTimeout(() => setCopiedAll(false), 2000);
+    if (copyAllTimerRef.current !== null) window.clearTimeout(copyAllTimerRef.current);
+    copyAllTimerRef.current = window.setTimeout(() => {
+      copyAllTimerRef.current = null;
+      setCopiedAll(false);
+    }, 2000);
   };
 
   const getFileIcon = (lang: string) => {
